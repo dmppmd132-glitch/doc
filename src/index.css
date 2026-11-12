@@ -1,0 +1,14 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  body {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    @apply antialiased bg-slate-50 text-slate-900 selection:bg-slate-200;
+  }
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}

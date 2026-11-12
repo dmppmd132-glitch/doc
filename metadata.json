@@ -1,0 +1,6 @@
+{
+  "name": "Apex DMS - 企業 SOP 與 SPEC 文件審核管理系統",
+  "description": "專為團隊設計的現代化內部 SOP 與 SPEC 文件管理與審核系統，具備版本追蹤、主管核准自動升版、改版申請與權限控管。",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
