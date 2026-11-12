@@ -8,10 +8,9 @@ import {
   Plus,
   ShieldCheck,
   Building2,
-  FileCode,
+  LogOut,
   RotateCcw,
-  CheckCircle2,
-  AlertCircle
+  KeyRound
 } from 'lucide-react';
 import { useDms } from '../context/DmsContext';
 import { Role } from '../types/dms';
@@ -31,32 +30,30 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenCreate,
   onOpenTeamModal,
 }) => {
-  const { currentUser, pendingReviewCount, resetToSeedData } = useDms();
+  const { currentUser, pendingReviewCount, resetToSeedData, logout } = useDms();
 
-  const getRoleBadge = (role: Role) => {
+  const getRoleBadge = (role?: Role) => {
     switch (role) {
       case 'Approver':
         return {
           label: '審核主管',
           color: 'bg-purple-100 text-purple-700 border-purple-200',
-          desc: '擁有全權限與核准/退回功能',
         };
       case 'Editor':
         return {
           label: '撰寫人',
           color: 'bg-blue-100 text-blue-700 border-blue-200',
-          desc: '可起草、上傳與發起改版申請',
         };
       case 'Viewer':
+      default:
         return {
           label: '一般員工',
           color: 'bg-slate-100 text-slate-700 border-slate-200',
-          desc: '僅能查閱與下載已生效文件',
         };
     }
   };
 
-  const roleInfo = getRoleBadge(currentUser.role);
+  const roleInfo = getRoleBadge(currentUser?.role);
 
   return (
     <aside className="w-64 bg-white border-r border-slate-200 flex flex-col shrink-0 select-none">
@@ -70,7 +67,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div className="font-semibold text-slate-900 text-sm tracking-tight flex items-center gap-1.5">
               Apex DMS
               <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-100 text-slate-500 border border-slate-200">
-                10-Team
+                Supabase
               </span>
             </div>
             <p className="text-xs text-slate-500 truncate">SOP & SPEC 文件管理系統</p>
@@ -78,42 +75,53 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
       </div>
 
-      {/* Current User & Role Card */}
-      <div className="p-3 mx-3 my-3 bg-slate-50 rounded-lg border border-slate-200">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-[11px] font-medium text-slate-500">當前登入身分</span>
-          <button
-            onClick={onOpenTeamModal}
-            className="text-[11px] text-blue-600 hover:text-blue-800 font-medium hover:underline flex items-center gap-0.5"
-          >
-            快速切換
-          </button>
-        </div>
-        <div className="flex items-center gap-2">
-          <div
-            className={`w-8 h-8 rounded-full ${currentUser.avatarColor} text-white flex items-center justify-center text-xs font-semibold shrink-0`}
-          >
-            {currentUser.name.slice(0, 1)}
+      {/* Real Authenticated User Card (No Switcher) */}
+      {currentUser && (
+        <div className="p-3 mx-3 my-3 bg-slate-50 rounded-lg border border-slate-200">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+              登入帳號資訊
+            </span>
+            <button
+              onClick={() => {
+                if (confirm('確定要登出系統嗎？')) {
+                  logout();
+                }
+              }}
+              className="text-[11px] text-slate-500 hover:text-rose-600 flex items-center gap-1 font-medium transition-colors"
+            >
+              <LogOut className="w-3 h-3" />
+              <span>登出</span>
+            </button>
           </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs font-semibold text-slate-900 truncate">{currentUser.name}</span>
-              <span
-                className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${roleInfo.color}`}
-              >
-                {roleInfo.label}
-              </span>
+          <div className="flex items-center gap-2">
+            <div
+              className={`w-8 h-8 rounded-full ${currentUser.avatarColor} text-white flex items-center justify-center text-xs font-semibold shrink-0`}
+            >
+              {currentUser.name.slice(0, 1)}
             </div>
-            <p className="text-[11px] text-slate-500 truncate">
-              {currentUser.department}部 · {currentUser.title}
-            </p>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-semibold text-slate-900 truncate">
+                  {currentUser.name}
+                </span>
+                <span
+                  className={`text-[10px] px-1.5 py-0.2 rounded border font-medium ${roleInfo.color}`}
+                >
+                  {roleInfo.label}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500 truncate">
+                {currentUser.department}部 · {currentUser.title}
+              </p>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Action Button: Create Document */}
       <div className="px-3 mb-2">
-        {currentUser.role !== 'Viewer' ? (
+        {currentUser?.role !== 'Viewer' ? (
           <button
             onClick={onOpenCreate}
             className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-slate-900 hover:bg-slate-800 active:bg-slate-950 text-white text-xs font-medium rounded-lg shadow-xs transition-colors"
@@ -144,12 +152,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <span>文件總覽</span>
           </div>
           <span className="text-[10px] text-slate-500">
-            {currentUser.role === 'Viewer' ? '已生效' : '全覽'}
+            {currentUser?.role === 'Viewer' ? '已生效' : '全覽'}
           </span>
         </button>
 
         {/* 2. 待我審核 (Approver Only) */}
-        {currentUser.role === 'Approver' && (
+        {currentUser?.role === 'Approver' && (
           <button
             onClick={() => onTabChange('pending')}
             className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-colors ${
@@ -171,7 +179,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         )}
 
         {/* 3. 我的草稿與申請 (Editor / Approver) */}
-        {currentUser.role !== 'Viewer' && (
+        {currentUser?.role !== 'Viewer' && (
           <button
             onClick={() => onTabChange('drafts')}
             className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-colors ${
@@ -188,7 +196,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         )}
 
         {/* 4. 歷史作廢區 (Editor / Approver Only) */}
-        {currentUser.role !== 'Viewer' && (
+        {currentUser?.role !== 'Viewer' && (
           <button
             onClick={() => onTabChange('archived')}
             className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-colors ${
@@ -205,7 +213,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </button>
         )}
 
-        {/* 5. 團隊成員與權限表 */}
+        {/* 5. 組織名冊與權限表 (Read-only Directory) */}
         <button
           onClick={() => onTabChange('team')}
           className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-colors ${
@@ -216,7 +224,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         >
           <div className="flex items-center gap-2.5">
             <Users className="w-4 h-4 text-slate-500" />
-            <span>10人團隊權限表</span>
+            <span>組織名冊與權限表</span>
           </div>
           <span className="text-[10px] text-slate-500">RBAC</span>
         </button>
@@ -226,12 +234,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <div className="p-3 border-t border-slate-200 bg-slate-50/70 text-[11px] text-slate-500">
         <div className="flex items-center gap-1.5 font-medium text-slate-700 mb-1">
           <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-          <span>權限範圍摘要</span>
+          <span>登入身分權限狀態</span>
         </div>
         <p className="leading-tight text-slate-500 text-[10px]">
-          {currentUser.role === 'Viewer' && '您處於一般員工檢視模式，僅能查看公司最新「已生效」文件，確保執行唯一正本。'}
-          {currentUser.role === 'Editor' && '您可起草新增 SOP/SPEC、發起改版申請，送審期間舊版將維持已生效直到主管核准。'}
-          {currentUser.role === 'Approver' && '您具備主管核准與退回權限。核准新版時系統將自動升版並將舊版標記為歷史作廢。'}
+          {currentUser?.role === 'Viewer' && '您以「一般員工」身分登入，僅能查閱公司最新「已生效」文件。'}
+          {currentUser?.role === 'Editor' && '您以「撰寫人」身分登入，可起草文件與發起改版申請，送審期間舊版維持已生效。'}
+          {currentUser?.role === 'Approver' && '您以「審核主管」身分登入，具備待辦審核、核准自動升版與舊版封存全權限。'}
         </p>
 
         <div className="mt-3 pt-2 border-t border-slate-200 flex items-center justify-between">

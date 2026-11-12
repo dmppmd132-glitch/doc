@@ -55,7 +55,7 @@ export const DocumentList: React.FC<DocumentListProps> = ({
     return documents.filter((doc) => {
       // 1. Role enforcement:
       // Viewer (一般員工) ONLY sees '已生效' documents!
-      if (currentUser.role === 'Viewer') {
+      if (currentUser?.role === 'Viewer') {
         if (doc.status !== '已生效') return false;
       }
 
@@ -87,7 +87,7 @@ export const DocumentList: React.FC<DocumentListProps> = ({
 
       return true;
     });
-  }, [documents, currentUser.role, selectedType, selectedDept, searchQuery]);
+  }, [documents, currentUser?.role, selectedType, selectedDept, searchQuery]);
 
   // Sort documents
   const sortedDocuments = useMemo(() => {
@@ -107,7 +107,7 @@ export const DocumentList: React.FC<DocumentListProps> = ({
   const handleDownloadQuick = (e: React.MouseEvent, doc: Document) => {
     e.stopPropagation();
     const activeVer = getActiveVersion(doc) || doc.versions[0];
-    const blobContent = `APEX DMS - 正本文件下載\n文件編號: ${doc.docNumber}\n文件名稱: ${doc.title}\n版次: ${activeVer.version}\n下載者: ${currentUser.name} (${currentUser.title})\n下載時間: ${new Date().toLocaleString('zh-TW')}\n\n修訂摘要: ${activeVer.revisionSummary}`;
+    const blobContent = `APEX DMS - 正本文件下載\n文件編號: ${doc.docNumber}\n文件名稱: ${doc.title}\n版次: ${activeVer.version}\n下載者: ${currentUser?.name || '使用者'} (${currentUser?.title || '專員'})\n下載時間: ${new Date().toLocaleString('zh-TW')}\n\n修訂摘要: ${activeVer.revisionSummary}`;
     const blob = new Blob([blobContent], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = window.document.createElement('a');
@@ -131,14 +131,14 @@ export const DocumentList: React.FC<DocumentListProps> = ({
             <h1 className="text-base font-bold text-slate-900">
               文件總覽 (Documents Overview)
             </h1>
-            {currentUser.role === 'Viewer' && (
+            {currentUser?.role === 'Viewer' && (
               <span className="text-[11px] px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-medium">
                 一般員工模式：嚴格僅展示最新已生效正本
               </span>
             )}
           </div>
           <p className="text-xs text-slate-500">
-            {currentUser.role === 'Viewer'
+            {currentUser?.role === 'Viewer'
               ? '您僅可查閱全公司已通過主管審核生效之最新正式 SOP 與 SPEC 文件，確保生產線與檢驗依循唯一最新基準。'
               : '管理全公司研發、品保、生產、管理、業務各項標準作業程序與工程規格書，具備完整版次追蹤與主管審核升版機制。'}
           </p>
@@ -152,7 +152,7 @@ export const DocumentList: React.FC<DocumentListProps> = ({
               {activeCount} 件
             </span>
           </div>
-          {currentUser.role !== 'Viewer' && (
+          {currentUser?.role !== 'Viewer' && (
             <div className="text-right pl-4 border-l border-slate-200">
               <span className="text-amber-600 text-[11px] block">審核改版進行中</span>
               <span className="font-mono font-bold text-amber-700 text-base tabular-nums">
@@ -353,7 +353,7 @@ export const DocumentList: React.FC<DocumentListProps> = ({
                             已生效
                           </span>
                           {/* If there's an ongoing revision under review and currentUser is Editor or Approver */}
-                          {currentUser.role !== 'Viewer' && pendingVer && (
+                          {currentUser?.role !== 'Viewer' && pendingVer && (
                             <span
                               title={`改版申請中 (${pendingVer.version})`}
                               className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-amber-50 text-amber-700 border border-amber-200"
@@ -410,7 +410,7 @@ export const DocumentList: React.FC<DocumentListProps> = ({
                         </button>
 
                         {/* Editor / Approver can initiate revision directly */}
-                        {currentUser.role !== 'Viewer' &&
+                        {currentUser?.role !== 'Viewer' &&
                           doc.status === '已生效' &&
                           !pendingVer && (
                             <button
@@ -468,7 +468,7 @@ export const DocumentList: React.FC<DocumentListProps> = ({
                     <span className="px-1.5 py-0.2 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                       {doc.status}
                     </span>
-                    {currentUser.role !== 'Viewer' && pendingVer && (
+                    {currentUser?.role !== 'Viewer' && pendingVer && (
                       <span className="px-1 py-0.2 rounded text-[10px] font-mono bg-amber-50 text-amber-700">
                         改版中
                       </span>

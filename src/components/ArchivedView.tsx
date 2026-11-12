@@ -27,7 +27,7 @@ export const ArchivedView: React.FC<ArchivedViewProps> = ({ onSelectDocument }) 
   });
 
   const handleDownload = (doc: Document, version: DocVersion) => {
-    const blobContent = `APEX DMS - 歷史已作廢文件封存檔\n文件編號: ${doc.docNumber}\n文件名稱: ${doc.title}\n版次: ${version.version} (已作廢封存)\n現行最新生效版次: ${doc.currentVersion}\n下載人員: ${currentUser.name}\n\n修訂摘要: ${version.revisionSummary}\n主管備註: ${version.reviewComment || '無'}`;
+    const blobContent = `APEX DMS - 歷史已作廢文件封存檔\n文件編號: ${doc.docNumber}\n文件名稱: ${doc.title}\n版次: ${version.version} (已作廢封存)\n現行最新生效版次: ${doc.currentVersion}\n下載人員: ${currentUser?.name || '使用者'}\n\n修訂摘要: ${version.revisionSummary}\n主管備註: ${version.reviewComment || '無'}`;
     const blob = new Blob([blobContent], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = window.document.createElement('a');

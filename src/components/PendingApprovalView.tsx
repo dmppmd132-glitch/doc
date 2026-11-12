@@ -66,7 +66,7 @@ export const PendingApprovalView: React.FC<PendingApprovalViewProps> = ({
         <div className="p-3 bg-purple-50 border border-purple-200 rounded-lg text-xs text-purple-900 shrink-0">
           <div className="flex items-center gap-1.5 font-bold mb-0.5">
             <ShieldCheck className="w-4 h-4 text-purple-700" />
-            <span>主管審批授權：{currentUser.name} ({currentUser.title})</span>
+            <span>主管審批授權：{currentUser?.name} ({currentUser?.title})</span>
           </div>
           <span className="text-[11px] text-purple-700">
             具備品保與研發規範之最終核准與退回權責。

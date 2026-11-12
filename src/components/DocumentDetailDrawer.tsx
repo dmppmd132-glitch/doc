@@ -55,7 +55,7 @@ export const DocumentDetailDrawer: React.FC<DocumentDetailDrawerProps> = ({
 
   const handleDownload = (file: AttachedFile) => {
     // Generate text/csv blob for download demonstration
-    const blobContent = `--- APEX DMS 企業文件下載 ---\n文件編號: ${document.docNumber}\n文件名稱: ${document.title}\n版次: ${currentPreviewVersion.version}\n檔案名稱: ${file.name}\n下載人員: ${currentUser.name} (${currentUser.title})\n下載時間: ${new Date().toLocaleString('zh-TW')}\n\n[文件內文摘要]\n修訂摘要: ${currentPreviewVersion.revisionSummary}\n\n(此檔案由 Apex DMS 自動產製數位水簽正本)`;
+    const blobContent = `--- APEX DMS 企業文件下載 ---\n文件編號: ${document.docNumber}\n文件名稱: ${document.title}\n版次: ${currentPreviewVersion.version}\n檔案名稱: ${file.name}\n下載人員: ${currentUser?.name || '使用者'} (${currentUser?.title || '專員'})\n下載時間: ${new Date().toLocaleString('zh-TW')}\n\n[文件內文摘要]\n修訂摘要: ${currentPreviewVersion.revisionSummary}\n\n(此檔案由 Apex DMS 自動產製數位水簽正本)`;
     const blob = new Blob([blobContent], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = window.document.createElement('a');
@@ -173,7 +173,7 @@ export const DocumentDetailDrawer: React.FC<DocumentDetailDrawerProps> = ({
 
           <div className="flex items-center gap-2">
             {/* APPROVER ACTIONS: If this document has a version in '審核中' */}
-            {currentUser.role === 'Approver' && pendingVer && (
+            {currentUser?.role === 'Approver' && pendingVer && (
               <>
                 <button
                   onClick={() => onOpenRejectModal(document, pendingVer)}
@@ -200,7 +200,7 @@ export const DocumentDetailDrawer: React.FC<DocumentDetailDrawerProps> = ({
             )}
 
             {/* EDITOR / APPROVER ACTION: Initiate Revision on Active Document */}
-            {currentUser.role !== 'Viewer' &&
+            {currentUser?.role !== 'Viewer' &&
               document.status === '已生效' &&
               !pendingVer && (
                 <button
@@ -213,7 +213,7 @@ export const DocumentDetailDrawer: React.FC<DocumentDetailDrawerProps> = ({
               )}
 
             {/* EDITOR ACTION: Resubmit returned draft */}
-            {currentUser.role !== 'Viewer' &&
+            {currentUser?.role !== 'Viewer' &&
               currentPreviewVersion.status === '草稿' && (
                 <button
                   onClick={() => onOpenResubmit(document, currentPreviewVersion)}

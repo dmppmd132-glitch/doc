@@ -12,11 +12,12 @@ import { RevisionModal } from './components/RevisionModal';
 import { RejectReviewModal } from './components/RejectReviewModal';
 import { ResubmitModal } from './components/ResubmitModal';
 import { TeamDirectoryModal } from './components/TeamDirectoryModal';
+import { LoginPage } from './components/LoginPage';
 import { Document, DocVersion } from './types/dms';
-import { CheckCircle2, AlertCircle } from 'lucide-react';
+import { CheckCircle2 } from 'lucide-react';
 
 function DmsApp() {
-  const { currentUser, documents } = useDms();
+  const { currentUser, isAuthenticated, documents } = useDms();
 
   const [currentTab, setCurrentTab] = useState<NavTab>('overview');
   const [searchQuery, setSearchQuery] = useState('');
@@ -37,18 +38,23 @@ function DmsApp() {
     setTimeout(() => setToast(null), 3500);
   };
 
-  // If user switches role to Viewer while on an unauthorized tab, bounce them back to overview
+  // If user switches role to Viewer while on an unauthorized tab, redirect to overview
   useEffect(() => {
-    if (currentUser.role === 'Viewer') {
+    if (currentUser?.role === 'Viewer') {
       if (currentTab === 'pending' || currentTab === 'drafts' || currentTab === 'archived') {
         setCurrentTab('overview');
       }
-    } else if (currentUser.role === 'Editor') {
+    } else if (currentUser?.role === 'Editor') {
       if (currentTab === 'pending') {
         setCurrentTab('overview');
       }
     }
-  }, [currentUser.role, currentTab]);
+  }, [currentUser?.role, currentTab]);
+
+  // If not authenticated, show LoginPage
+  if (!isAuthenticated || !currentUser) {
+    return <LoginPage onLoginSuccess={() => showToast('登入成功，歡迎使用 Apex DMS！')} />;
+  }
 
   // Find currently opened document
   const selectedDocument = selectedDocId
