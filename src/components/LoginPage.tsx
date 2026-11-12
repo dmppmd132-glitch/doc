@@ -41,16 +41,19 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
+    console.log("登入按鈕被點擊了！", { name: name.trim(), passwordLength: password.length, isSignUp });
     e.preventDefault();
     setErrorMsg('');
     setSuccessMsg('');
 
     if (!name.trim() || !password) {
+      console.warn("表單驗證未通過：名稱或密碼為空");
       setErrorMsg('請輸入成員名稱與密碼');
       return;
     }
 
     if (password.length < 6) {
+      console.warn("表單驗證未通過：密碼長度小於 6");
       setErrorMsg('密碼長度至少需 6 個字元');
       return;
     }
@@ -59,7 +62,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
 
     try {
       if (supabaseReady) {
-        // Connect directly with real Supabase Auth using Name or Email
+        console.log("【發送 Supabase 請求】偵測到 VITE_SUPABASE_URL，正在向 Supabase 伺服器發送網路請求...");
         const res = await loginWithSupabase(
           name.trim(),
           password,
@@ -72,6 +75,12 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
           setTimeout(() => onLoginSuccess(), 400);
         }
       } else {
+        console.warn(
+          "【注意：當前為本機模擬模式，無 Network 請求】\n" +
+          "目前專案尚未在環境變數 (.env) 中設定有效的 VITE_SUPABASE_URL 與 VITE_SUPABASE_PUBLISHABLE_KEY。\n" +
+          "因此系統走內部成員模擬驗證（不會向外部網路發送 fetch 請求）。\n" +
+          "若需在 Network 分頁看見 Supabase 網路請求，請建立 .env 檔案填入真實的 Supabase 專案網址與 Key！"
+        );
         // Local simulation with team accounts by Name
         const success = loginWithLocal(name.trim(), password);
         if (success) {
@@ -260,7 +269,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-2.5 mt-2 bg-slate-900 hover:bg-slate-800 active:bg-slate-950 text-white font-medium text-xs rounded-md shadow-xs transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50"
+              onClick={() => console.log("按鈕原生 onClick 觸發！")}
+              className="w-full py-2.5 mt-2 bg-slate-900 hover:bg-slate-800 active:bg-slate-950 text-white font-medium text-xs rounded-md shadow-xs transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50 relative z-10 cursor-pointer"
             >
               {loading ? (
                 <span>驗證連線中...</span>

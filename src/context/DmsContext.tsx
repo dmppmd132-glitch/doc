@@ -200,15 +200,19 @@ export const DmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       return {};
     } else {
+      console.log("【開始執行 Supabase 兩步驟登入】輸入識別值：", nameOrEmail);
       // 步驟 1：先從 profiles 資料表用「名稱 (name)」找出對應的真實 Email
       let userEmail = nameOrEmail.trim();
 
       if (!userEmail.includes('@')) {
+        console.log("【步驟 1 發送 Network 請求】向 profiles 資料表查詢 Email...", { name: userEmail });
         const { data: profileData, error: profileError } = await supabase
           .from('profiles')
           .select('email, id, name, title, role, role_label, department, avatar_color')
           .eq('name', userEmail)
           .single();
+
+        console.log("【步驟 1 查詢結果】", { profileData, profileError });
 
         if (profileError || !profileData) {
           console.error('查詢 profiles 失敗：', profileError?.message);
@@ -216,13 +220,17 @@ export const DmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
 
         userEmail = profileData.email;
+        console.log("【步驟 1 成功匹配 Email】", userEmail);
       }
 
+      console.log("【步驟 2 發送 Network 請求】向 Supabase Auth 驗證密碼...", { email: userEmail });
       // 步驟 2：拿查到的 Email 與密碼去跟 Supabase Auth 驗證
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email: userEmail,
         password: password,
       });
+
+      console.log("【步驟 2 驗證結果】", { authData, authError });
 
       if (authError) {
         console.error('Supabase Auth 登入失敗：', authError.message);
