@@ -7,12 +7,26 @@
 create extension if not exists "uuid-ossp";
 
 -- 2. 建立使用者角色與設定檔表 (profiles)
--- 若現有資料表已有舊約束，直接更新約束與預設值為 QA：
+-- 2. 若現有資料表已有舊資料，先將舊部門值自動清洗對應為 QA, ME, PM（避免被舊資料卡住）：
 alter table public.profiles drop constraint if exists profiles_department_check;
+update public.profiles 
+set department = case 
+  when department in ('品保', 'QA') then 'QA'
+  when department in ('研發', '機構', 'ME') then 'ME'
+  when department in ('管理', '業務', '生產', '專案', 'PM') then 'PM'
+  else 'QA'
+end;
 alter table public.profiles alter column department set default 'QA';
 alter table public.profiles add constraint profiles_department_check check (department in ('QA', 'ME', 'PM'));
 
 alter table public.documents drop constraint if exists documents_department_check;
+update public.documents 
+set department = case 
+  when department in ('品保', 'QA') then 'QA'
+  when department in ('研發', '機構', 'ME') then 'ME'
+  when department in ('管理', '業務', '生產', '專案', 'PM') then 'PM'
+  else 'QA'
+end;
 alter table public.documents alter column department set default 'QA';
 alter table public.documents add constraint documents_department_check check (department in ('QA', 'ME', 'PM'));
 
