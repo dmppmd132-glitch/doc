@@ -119,7 +119,7 @@ export const DocumentDetailDrawer: React.FC<DocumentDetailDrawerProps> = ({
                 {document.docType}
               </span>
               <span className="text-xs px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 font-medium">
-                {document.department}部
+                {document.department}
               </span>
               {getStatusBadge(document.status)}
             </div>
@@ -355,7 +355,7 @@ export const DocumentDetailDrawer: React.FC<DocumentDetailDrawerProps> = ({
                   <p>
                     <strong>1.2 範圍：</strong>
                     {currentPreviewVersion.documentBody?.scope ||
-                      `適用於本公司 ${document.department} 部門所有標準作業流程與檢驗工程規範。`}
+                      `適用於本公司 ${document.department} 所有標準作業流程與檢驗工程規範。`}
                   </p>
                 </div>
               </div>

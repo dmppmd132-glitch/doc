@@ -29,11 +29,9 @@ interface DocumentListProps {
 const DOC_TYPES: Array<DocType | '全部'> = ['全部', 'SOP', 'SPEC', '表單', '規範'];
 const DEPARTMENTS: Array<Department | '全部部門'> = [
   '全部部門',
-  '研發',
-  '品保',
-  '生產',
-  '管理',
-  '業務',
+  'QA',
+  'ME',
+  'PM',
 ];
 
 export const DocumentList: React.FC<DocumentListProps> = ({
@@ -335,7 +333,7 @@ export const DocumentList: React.FC<DocumentListProps> = ({
 
                     {/* Department */}
                     <td className="py-3 px-3 whitespace-nowrap">
-                      <span className="text-slate-700 font-medium">{doc.department}部</span>
+                      <span className="text-slate-700 font-medium">{doc.department}</span>
                     </td>
 
                     {/* Active Version */}
@@ -447,7 +445,7 @@ export const DocumentList: React.FC<DocumentListProps> = ({
                       {doc.docNumber}
                     </span>
                     <span className="text-[11px] text-slate-500 font-medium">
-                      {doc.department}部 · {doc.docType}
+                      {doc.department} · {doc.docType}
                     </span>
                   </div>
 

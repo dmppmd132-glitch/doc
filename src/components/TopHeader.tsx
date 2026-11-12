@@ -115,7 +115,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
                 </span>
               </div>
               <span className="text-[10px] text-slate-500 block leading-tight">
-                {currentUser.department}部 · {currentUser.email}
+                {currentUser.department} · {currentUser.email}
               </span>
             </div>
 

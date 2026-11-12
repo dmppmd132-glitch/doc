@@ -112,7 +112,7 @@ export const ArchivedView: React.FC<ArchivedViewProps> = ({ onSelectDocument }) 
                   </td>
 
                   <td className="py-3 px-3 whitespace-nowrap text-slate-600">
-                    {doc.department}部
+                    {doc.department}
                   </td>
 
                   <td className="py-3 px-3 whitespace-nowrap">

@@ -7,6 +7,16 @@
 create extension if not exists "uuid-ossp";
 
 -- 2. 建立使用者角色與設定檔表 (profiles)
+-- 若現有資料表已有舊約束，直接更新約束與預設值為 QA：
+alter table public.profiles drop constraint if exists profiles_department_check;
+alter table public.profiles alter column department set default 'QA';
+alter table public.profiles add constraint profiles_department_check check (department in ('QA', 'ME', 'PM'));
+
+alter table public.documents drop constraint if exists documents_department_check;
+alter table public.documents alter column department set default 'QA';
+alter table public.documents add constraint documents_department_check check (department in ('QA', 'ME', 'PM'));
+
+-- 2. 建立使用者角色與設定檔表 (profiles)
 create table if not exists public.profiles (
   id uuid references auth.users(id) on delete cascade primary key,
   email text not null,
@@ -14,7 +24,7 @@ create table if not exists public.profiles (
   title text default '專員',
   role text not null check (role in ('Approver', 'Editor', 'Viewer')),
   role_label text not null,
-  department text not null check (department in ('研發', '品保', '生產', '管理', '業務')),
+  department text not null default 'QA' check (department in ('QA', 'ME', 'PM')),
   avatar_color text default 'bg-slate-700',
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
@@ -26,7 +36,7 @@ create table if not exists public.documents (
   doc_number text unique not null,
   title text not null,
   doc_type text not null check (doc_type in ('SOP', 'SPEC', '表單', '規範')),
-  department text not null check (department in ('研發', '品保', '生產', '管理', '業務')),
+  department text not null default 'QA' check (department in ('QA', 'ME', 'PM')),
   department_code text not null,
   current_version text not null default 'v1.0',
   status text not null check (status in ('草稿', '審核中', '已生效', '已作廢')),
@@ -82,7 +92,7 @@ begin
     coalesce(new.raw_user_meta_data->>'title', '工程師'),
     coalesce(new.raw_user_meta_data->>'role', 'Editor'),
     coalesce(new.raw_user_meta_data->>'role_label', '撰寫人'),
-    coalesce(new.raw_user_meta_data->>'department', '研發'),
+    coalesce(new.raw_user_meta_data->>'department', 'QA'),
     coalesce(new.raw_user_meta_data->>'avatar_color', 'bg-blue-600')
   );
   return new;

@@ -106,7 +106,7 @@ export const DmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             .from('profiles')
             .select('*')
             .eq('id', session.user.id)
-            .single()
+            .maybeSingle()
             .then(({ data: profile, error }) => {
               if (profile && !error) {
                 const userObj: User = {
@@ -210,7 +210,7 @@ export const DmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           .from('profiles')
           .select('email, id, name, title, role, role_label, department, avatar_color')
           .eq('name', userEmail)
-          .single();
+          .maybeSingle();
 
         console.log("【步驟 1 查詢結果】", { profileData, profileError });
 
@@ -248,7 +248,7 @@ export const DmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           .from('profiles')
           .select('*')
           .eq('id', authData.user.id)
-          .single();
+          .maybeSingle();
 
         const role = profile?.role || 'Editor';
         const userObj: User = {
@@ -258,7 +258,7 @@ export const DmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           role: role,
           roleLabel:
             role === 'Approver' ? '審核主管' : role === 'Editor' ? '撰寫人' : '一般員工',
-          department: profile?.department || '研發',
+          department: (profile?.department as Department) || 'QA',
           email: authData.user.email || userEmail,
           avatarColor: profile?.avatar_color || 'bg-slate-700',
         };

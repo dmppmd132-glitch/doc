@@ -122,7 +122,7 @@ export const TeamDirectoryModal: React.FC<TeamDirectoryModalProps> = ({
                         </td>
 
                         <td className="p-3 font-medium text-slate-700">
-                          {member.department}部
+                          {member.department}
                         </td>
 
                         <td className="p-3">

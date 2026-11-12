@@ -2,9 +2,9 @@ export type Role = 'Viewer' | 'Editor' | 'Approver';
 
 export type DocType = 'SOP' | 'SPEC' | '表單' | '規範';
 
-export type Department = '研發' | '品保' | '生產' | '管理' | '業務';
+export type Department = 'QA' | 'ME' | 'PM';
 
-export type DepartmentCode = 'RD' | 'QA' | 'PR' | 'MG' | 'SL';
+export type DepartmentCode = 'QA' | 'ME' | 'PM' | string;
 
 export type DocStatus = '草稿' | '審核中' | '已生效' | '已作廢';
 

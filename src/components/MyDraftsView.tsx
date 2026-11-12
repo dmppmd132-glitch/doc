@@ -115,7 +115,7 @@ export const MyDraftsView: React.FC<MyDraftsViewProps> = ({
                         </span>
                       )}
                       <span className="text-xs text-slate-500">
-                        {doc.department}部 · {doc.docType}
+                        {doc.department} · {doc.docType}
                       </span>
                     </div>
 

@@ -112,7 +112,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 </span>
               </div>
               <p className="text-[11px] text-slate-500 truncate">
-                {currentUser.department}部 · {currentUser.title}
+                {currentUser.department} · {currentUser.title}
               </p>
             </div>
           </div>

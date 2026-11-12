@@ -10,7 +10,7 @@ interface CreateDocModalProps {
 }
 
 const DOC_TYPES: DocType[] = ['SOP', 'SPEC', '表單', '規範'];
-const DEPARTMENTS: Department[] = ['研發', '品保', '生產', '管理', '業務'];
+const DEPARTMENTS: Department[] = ['QA', 'ME', 'PM'];
 
 export const CreateDocModal: React.FC<CreateDocModalProps> = ({
   isOpen,
@@ -20,7 +20,7 @@ export const CreateDocModal: React.FC<CreateDocModalProps> = ({
   const { createDocument, generateDocNumber } = useDms();
 
   const [docType, setDocType] = useState<DocType>('SOP');
-  const [department, setDepartment] = useState<Department>('品保');
+  const [department, setDepartment] = useState<Department>('QA');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [revisionSummary, setRevisionSummary] = useState('初版發布，建立各項標準操作指引與檢驗項目。');
@@ -145,7 +145,7 @@ export const CreateDocModal: React.FC<CreateDocModalProps> = ({
               >
                 {DEPARTMENTS.map((d) => (
                   <option key={d} value={d}>
-                    {d}部
+                    {d}
                   </option>
                 ))}
               </select>

@@ -21,12 +21,11 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
   const { loginWithSupabase, loginWithLocal } = useDms();
   const [isSignUp, setIsSignUp] = useState(false);
 
-  // Form fields: Name and Password as requested
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
   const [title, setTitle] = useState('');
   const [role, setRole] = useState<Role>('Editor');
-  const [department, setDepartment] = useState<Department>('研發');
+  const [department, setDepartment] = useState<Department>('QA');
 
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -255,11 +254,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                       onChange={(e) => setDepartment(e.target.value as Department)}
                       className="w-full px-2.5 py-2 bg-slate-50 border border-slate-300 rounded-md outline-none text-xs"
                     >
-                      <option value="研發">研發部 (RD)</option>
-                      <option value="品保">品保部 (QA)</option>
-                      <option value="生產">生產部 (PR)</option>
-                      <option value="管理">管理部 (MG)</option>
-                      <option value="業務">業務部 (SL)</option>
+                      <option value="QA">QA</option>
+                      <option value="ME">ME</option>
+                      <option value="PM">PM</option>
                     </select>
                   </div>
                 </div>
@@ -296,7 +293,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                   className="w-full p-2 bg-purple-50 hover:bg-purple-100/70 border border-purple-200 rounded text-left flex items-center justify-between text-[11px] text-purple-900 transition-colors"
                 >
                   <div>
-                    <strong className="block text-purple-950">王建國 (審核主管 · 品保部)</strong>
+                    <strong className="block text-purple-950">王建國 (審核主管 · QA)</strong>
                     <span className="text-purple-700 font-mono text-[10px]">密碼預設: apex1234</span>
                   </div>
                   <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-200/80 font-medium text-purple-800">
@@ -310,7 +307,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                   className="w-full p-2 bg-blue-50 hover:bg-blue-100/70 border border-blue-200 rounded text-left flex items-center justify-between text-[11px] text-blue-900 transition-colors"
                 >
                   <div>
-                    <strong className="block text-blue-950">林哲宇 (撰寫人 · 研發部)</strong>
+                    <strong className="block text-blue-950">林哲宇 (撰寫人 · ME)</strong>
                     <span className="text-blue-700 font-mono text-[10px]">密碼預設: apex1234</span>
                   </div>
                   <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-200/80 font-medium text-blue-800">
@@ -324,7 +321,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                   className="w-full p-2 bg-slate-100 hover:bg-slate-200/70 border border-slate-200 rounded text-left flex items-center justify-between text-[11px] text-slate-800 transition-colors"
                 >
                   <div>
-                    <strong className="block text-slate-900">陳俊霖 (一般員工 · 生產線)</strong>
+                    <strong className="block text-slate-900">陳俊霖 (一般員工 · PM)</strong>
                     <span className="text-slate-600 font-mono text-[10px]">密碼預設: apex1234</span>
                   </div>
                   <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-200 font-medium text-slate-700">
