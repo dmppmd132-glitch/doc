@@ -200,54 +200,58 @@ export const DmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       return {};
     } else {
-      // Sign in flow: resolve Name to Email if no @ provided
-      let targetEmail = nameOrEmail.trim();
-      if (!targetEmail.includes('@')) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('email')
-          .eq('name', targetEmail)
-          .limit(1)
-          .maybeSingle();
+      // 步驟 1：先從 profiles 資料表用「名稱 (name)」找出對應的真實 Email
+      let userEmail = nameOrEmail.trim();
 
-        if (profile?.email) {
-          targetEmail = profile.email;
-        } else {
-          // Check matching local team member email
-          const matched = TEAM_MEMBERS.find((m) => m.name === targetEmail);
-          if (matched) {
-            targetEmail = matched.email;
-          } else {
-            targetEmail = `${targetEmail.toLowerCase()}@apex.internal`;
-          }
+      if (!userEmail.includes('@')) {
+        const { data: profileData, error: profileError } = await supabase
+          .from('profiles')
+          .select('email, id, name, title, role, role_label, department, avatar_color')
+          .eq('name', userEmail)
+          .single();
+
+        if (profileError || !profileData) {
+          console.error('查詢 profiles 失敗：', profileError?.message);
+          return { error: '查無此成員名稱，請確認輸入姓名是否正確或已於 Supabase profiles 建立' };
         }
+
+        userEmail = profileData.email;
       }
 
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: targetEmail,
-        password,
+      // 步驟 2：拿查到的 Email 與密碼去跟 Supabase Auth 驗證
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email: userEmail,
+        password: password,
       });
 
-      if (error) return { error: error.message };
+      if (authError) {
+        console.error('Supabase Auth 登入失敗：', authError.message);
+        return {
+          error:
+            authError.message === 'Invalid login credentials'
+              ? '密碼不正確，請重新確認'
+              : authError.message,
+        };
+      }
 
-      if (data.user) {
-        // Fetch profile
+      if (authData.user) {
+        // 載入成員完整權限設定檔
         const { data: profile } = await supabase
           .from('profiles')
           .select('*')
-          .eq('id', data.user.id)
+          .eq('id', authData.user.id)
           .single();
 
         const role = profile?.role || 'Editor';
         const userObj: User = {
-          id: data.user.id,
-          name: profile?.name || nameOrEmail.trim() || '使用者',
+          id: authData.user.id,
+          name: profile?.name || nameOrEmail.trim(),
           title: profile?.title || '專員',
           role: role,
           roleLabel:
             role === 'Approver' ? '審核主管' : role === 'Editor' ? '撰寫人' : '一般員工',
           department: profile?.department || '研發',
-          email: data.user.email || targetEmail,
+          email: authData.user.email || userEmail,
           avatarColor: profile?.avatar_color || 'bg-slate-700',
         };
 
