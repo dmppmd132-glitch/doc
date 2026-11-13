@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, Document, DocVersion, AttachedFile, DocType, Department, DocStatus, Role } from '../types/dms';
 import { DEPARTMENT_CODES } from '../data/initialData';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { checkR2Status, getR2DownloadUrl } from '../lib/r2Client';
 
 const STORAGE_KEY_DOCS = 'apex_dms_documents_v3';
 const STORAGE_KEY_AUTH_USER = 'apex_dms_auth_user_v3';
@@ -59,6 +60,7 @@ interface SignUpMetadata {
 interface DmsContextType {
   currentUser: User | null;
   isAuthenticated: boolean;
+  r2Configured: boolean;
   teamMembers: User[];
   documents: Document[];
   pendingReviewCount: number;
@@ -72,6 +74,7 @@ interface DmsContextType {
   resubmitDraft: (docId: string, versionId: string, summary: string, file?: AttachedFile) => void;
   saveDraft: (docId: string, versionId: string, data: Partial<DocVersion>) => void;
   deleteDocumentDraft: (docId: string) => void;
+  downloadDocumentFile: (doc: Document, version: DocVersion) => Promise<void>;
   getActiveVersion: (doc: Document) => DocVersion | undefined;
   getPendingVersion: (doc: Document) => DocVersion | undefined;
 }
@@ -79,7 +82,9 @@ interface DmsContextType {
 const DmsContext = createContext<DmsContextType | null>(null);
 
 export const DmsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Clean up legacy v2 demo cache on mount
+  // Clean up legacy v2 demo cache & check R2 status on mount
+  const [r2Configured, setR2Configured] = useState(false);
+
   useEffect(() => {
     try {
       localStorage.removeItem('apex_dms_documents_v2');
@@ -87,6 +92,9 @@ export const DmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch {
       // ignore storage access errors
     }
+    checkR2Status().then((status) => {
+      setR2Configured(status.configured);
+    });
   }, []);
 
   // Current user state (starts as null, requiring real login)
@@ -175,6 +183,7 @@ export const DmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 size: v.file_size,
                 type: (v.file_type || 'pdf') as AttachedFile['type'],
                 uploadDate: formatDbTimestamp(v.submitted_at),
+                fileUrl: v.file_url || undefined,
               },
               status: v.status as DocStatus,
               author: v.author,
@@ -569,6 +578,7 @@ export const DmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           file_name: newVersion.file.name,
           file_size: newVersion.file.size,
           file_type: newVersion.file.type,
+          file_url: newVersion.file.fileUrl || null,
           status: newVersion.status,
           author: newVersion.author,
           author_id: newVersion.authorId,
@@ -665,6 +675,7 @@ export const DmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             file_name: newVersion.file.name,
             file_size: newVersion.file.size,
             file_type: newVersion.file.type,
+            file_url: newVersion.file.fileUrl || null,
             status: newVersion.status,
             author: newVersion.author,
             author_id: newVersion.authorId,
@@ -873,6 +884,7 @@ export const DmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 file_name: targetVer.file.name,
                 file_size: targetVer.file.size,
                 file_type: targetVer.file.type,
+                file_url: targetVer.file.fileUrl || null,
                 submitted_at: isoNow,
                 review_comment: null,
               })
@@ -933,11 +945,42 @@ export const DmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  // Download file (uses Cloudflare R2 Presigned URL when fileUrl is present)
+  const downloadDocumentFile = async (doc: Document, version: DocVersion) => {
+    if (version.file.fileUrl) {
+      try {
+        const downloadUrl = await getR2DownloadUrl(version.file.fileUrl, version.file.name);
+        const link = window.document.createElement('a');
+        link.href = downloadUrl;
+        link.download = version.file.name;
+        link.rel = 'noopener noreferrer';
+        window.document.body.appendChild(link);
+        link.click();
+        window.document.body.removeChild(link);
+        return;
+      } catch (err: any) {
+        alert(err?.message || '從 Cloudflare R2 下載檔案失敗，請確認環境變數設定');
+        return;
+      }
+    }
+
+    // Fallback summary when no binary file was uploaded to R2
+    const blobContent = `--- APEX DMS 文件摘要 ---\n文件編號: ${doc.docNumber}\n文件名稱: ${doc.title}\n版次: ${version.version}\n檔案名稱: ${version.file.name}\n下載人員: ${currentUser?.name || '使用者'}\n下載時間: ${new Date().toLocaleString('zh-TW')}\n\n[修訂摘要]\n${version.revisionSummary}\n\n(提示：此版本建立時未上傳實體原檔至 Cloudflare R2)`;
+    const blob = new Blob([blobContent], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = window.document.createElement('a');
+    link.href = url;
+    link.download = version.file.name.replace(/\.[^/.]+$/, '') + '_摘要.txt';
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <DmsContext.Provider
       value={{
         currentUser,
         isAuthenticated,
+        r2Configured,
         teamMembers,
         documents,
         pendingReviewCount,
@@ -951,6 +994,7 @@ export const DmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         resubmitDraft,
         saveDraft,
         deleteDocumentDraft,
+        downloadDocumentFile,
         getActiveVersion,
         getPendingVersion,
       }}

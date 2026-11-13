@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, Upload, FileCode, CheckCircle2, AlertTriangle, Send } from 'lucide-react';
 import { Document, DocVersion, AttachedFile } from '../types/dms';
 import { useDms } from '../context/DmsContext';
+import { uploadFileToR2, formatFileSize, detectFileExtensionType } from '../lib/r2Client';
 
 interface ResubmitModalProps {
   document: Document | null;
@@ -18,16 +19,19 @@ export const ResubmitModal: React.FC<ResubmitModalProps> = ({
   onClose,
   onSuccess,
 }) => {
-  const { resubmitDraft } = useDms();
+  const { resubmitDraft, r2Configured } = useDms();
   const [summary, setSummary] = useState(version ? version.revisionSummary : '');
+  const [rawFile, setRawFile] = useState<File | null>(null);
   const [file, setFile] = useState<AttachedFile>(
     version ? version.file : {
       name: 'revised_file.pdf',
-      size: '2.5 MB',
+      size: '0 KB',
       type: 'pdf',
       uploadDate: new Date().toLocaleDateString('zh-TW'),
     }
   );
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [error, setError] = useState('');
 
   if (!isOpen || !document || !version) return null;
@@ -35,28 +39,44 @@ export const ResubmitModal: React.FC<ResubmitModalProps> = ({
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     if (f) {
-      let fType: 'pdf' | 'docx' | 'xlsx' = 'pdf';
-      const ext = f.name.split('.').pop()?.toLowerCase();
-      if (ext === 'docx' || ext === 'doc') fType = 'docx';
-      else if (ext === 'xlsx' || ext === 'xls') fType = 'xlsx';
-
+      setRawFile(f);
+      setError('');
       setFile({
         name: f.name,
-        size: `${(f.size / (1024 * 1024)).toFixed(1)} MB`,
-        type: fType,
+        size: formatFileSize(f.size),
+        type: detectFileExtensionType(f.name),
         uploadDate: new Date().toLocaleDateString('zh-TW'),
       });
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!summary.trim()) {
       setError('修訂摘要為必填項目');
       return;
     }
 
-    resubmitDraft(document.id, version.id, summary.trim(), file);
+    let finalFile = file;
+    if (rawFile && r2Configured) {
+      setUploading(true);
+      setUploadProgress(0);
+      try {
+        const objectKey = await uploadFileToR2(rawFile, document.docNumber, version.version, setUploadProgress);
+        finalFile = {
+          ...file,
+          fileUrl: objectKey,
+        };
+      } catch (err: any) {
+        setError(err?.message || '上傳檔案至 Cloudflare R2 失敗');
+        setUploading(false);
+        return;
+      } finally {
+        setUploading(false);
+      }
+    }
+
+    resubmitDraft(document.id, version.id, summary.trim(), finalFile);
     onClose();
     onSuccess();
   };
@@ -138,11 +158,24 @@ export const ResubmitModal: React.FC<ResubmitModalProps> = ({
                   <input
                     type="file"
                     onChange={handleFileUpload}
-                    accept=".pdf,.docx,.doc,.xlsx,.xls"
                     className="hidden"
                   />
                 </label>
               </div>
+              {uploading && (
+                <div className="mt-2 space-y-1">
+                  <div className="flex justify-between text-[10px] font-mono text-amber-700">
+                    <span>正在上傳修正檔案至 R2...</span>
+                    <span>{uploadProgress}%</span>
+                  </div>
+                  <div className="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
+                    <div
+                      className="bg-amber-600 h-1.5 transition-all duration-150"
+                      style={{ width: `${uploadProgress}%` }}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -156,10 +189,11 @@ export const ResubmitModal: React.FC<ResubmitModalProps> = ({
             </button>
             <button
               type="submit"
-              className="px-4 py-2 text-xs font-semibold text-white bg-amber-600 hover:bg-amber-700 rounded-md shadow-xs transition-colors flex items-center gap-1.5"
+              disabled={uploading}
+              className="px-4 py-2 text-xs font-semibold text-white bg-amber-600 hover:bg-amber-700 rounded-md shadow-xs transition-colors flex items-center gap-1.5 disabled:opacity-50"
             >
               <CheckCircle2 className="w-3.5 h-3.5" />
-              <span>重新送出主管審核</span>
+              <span>{uploading ? `上傳中 (${uploadProgress}%)` : '重新送出主管審核'}</span>
             </button>
           </div>
         </form>

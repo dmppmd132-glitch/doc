@@ -40,7 +40,7 @@ export const DocumentList: React.FC<DocumentListProps> = ({
   searchQuery,
   onSearchChange,
 }) => {
-  const { currentUser, documents, getActiveVersion, getPendingVersion } = useDms();
+  const { currentUser, documents, getActiveVersion, getPendingVersion, downloadDocumentFile } = useDms();
 
   const [selectedType, setSelectedType] = useState<string>('全部');
   const [selectedDept, setSelectedDept] = useState<string>('全部部門');
@@ -102,17 +102,12 @@ export const DocumentList: React.FC<DocumentListProps> = ({
     });
   }, [visibleDocuments, sortBy, sortOrder]);
 
-  const handleDownloadQuick = (e: React.MouseEvent, doc: Document) => {
+  const handleDownloadQuick = async (e: React.MouseEvent, doc: Document) => {
     e.stopPropagation();
     const activeVer = getActiveVersion(doc) || doc.versions[0];
-    const blobContent = `APEX DMS - 正本文件下載\n文件編號: ${doc.docNumber}\n文件名稱: ${doc.title}\n版次: ${activeVer.version}\n下載者: ${currentUser?.name || '使用者'} (${currentUser?.title || '專員'})\n下載時間: ${new Date().toLocaleString('zh-TW')}\n\n修訂摘要: ${activeVer.revisionSummary}`;
-    const blob = new Blob([blobContent], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = window.document.createElement('a');
-    link.href = url;
-    link.download = `${doc.docNumber}_${activeVer.version}.txt`;
-    link.click();
-    URL.revokeObjectURL(url);
+    if (activeVer) {
+      await downloadDocumentFile(doc, activeVer);
+    }
   };
 
   const activeCount = documents.filter((d) => d.status === '已生效').length;

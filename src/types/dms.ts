@@ -22,8 +22,9 @@ export interface User {
 export interface AttachedFile {
   name: string;
   size: string;
-  type: 'pdf' | 'docx' | 'xlsx';
+  type: 'pdf' | 'docx' | 'xlsx' | string;
   uploadDate: string;
+  fileUrl?: string;
   contentPreview?: string;
 }
 

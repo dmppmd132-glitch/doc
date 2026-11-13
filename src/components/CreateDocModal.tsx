@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, Upload, FileText, CheckCircle2, AlertCircle, FileCode } from 'lucide-react';
 import { DocType, Department, AttachedFile } from '../types/dms';
 import { useDms } from '../context/DmsContext';
+import { uploadFileToR2, formatFileSize, detectFileExtensionType } from '../lib/r2Client';
 
 interface CreateDocModalProps {
   isOpen: boolean;
@@ -17,7 +18,7 @@ export const CreateDocModal: React.FC<CreateDocModalProps> = ({
   onClose,
   onSuccess,
 }) => {
-  const { createDocument, generateDocNumber } = useDms();
+  const { createDocument, generateDocNumber, r2Configured } = useDms();
 
   const [docType, setDocType] = useState<DocType>('SOP');
   const [department, setDepartment] = useState<Department>('QA');
@@ -25,15 +26,14 @@ export const CreateDocModal: React.FC<CreateDocModalProps> = ({
   const [description, setDescription] = useState('');
   const [revisionSummary, setRevisionSummary] = useState('初版發布，建立各項標準操作指引與檢驗項目。');
 
-  // File upload state
-  const [attachedFile, setAttachedFile] = useState<AttachedFile>({
-    name: 'SOP-QA-新制標準作業規範_v1.0.pdf',
-    size: '2.1 MB',
-    type: 'pdf',
-    uploadDate: new Date().toLocaleDateString('zh-TW'),
-  });
+  // Real File upload state
+  const [rawFile, setRawFile] = useState<File | null>(null);
+  const [attachedFile, setAttachedFile] = useState<AttachedFile | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadError, setUploadError] = useState('');
 
-  const [errors, setErrors] = useState<{ title?: string; summary?: string }>({});
+  const [errors, setErrors] = useState<{ title?: string; summary?: string; file?: string }>({});
 
   if (!isOpen) return null;
 
@@ -42,26 +42,26 @@ export const CreateDocModal: React.FC<CreateDocModalProps> = ({
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      let fileType: 'pdf' | 'docx' | 'xlsx' = 'pdf';
-      const ext = file.name.split('.').pop()?.toLowerCase();
-      if (ext === 'docx' || ext === 'doc') fileType = 'docx';
-      else if (ext === 'xlsx' || ext === 'xls') fileType = 'xlsx';
-
-      const sizeStr = `${(file.size / (1024 * 1024)).toFixed(1)} MB`;
+      setRawFile(file);
+      setUploadError('');
+      setErrors((prev) => ({ ...prev, file: undefined }));
 
       setAttachedFile({
         name: file.name,
-        size: sizeStr,
-        type: fileType,
+        size: formatFileSize(file.size),
+        type: detectFileExtensionType(file.name),
         uploadDate: new Date().toLocaleDateString('zh-TW'),
       });
     }
   };
 
   const validate = (): boolean => {
-    const newErrors: { title?: string; summary?: string } = {};
+    const newErrors: { title?: string; summary?: string; file?: string } = {};
     if (!title.trim()) {
       newErrors.title = '請輸入文件名稱';
+    }
+    if (!attachedFile) {
+      newErrors.file = '請選擇要上傳的實體文件檔案';
     }
     if (!revisionSummary.trim()) {
       newErrors.summary = '「本次修訂摘要」為必填欄位';
@@ -70,8 +70,29 @@ export const CreateDocModal: React.FC<CreateDocModalProps> = ({
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (submitForReview: boolean) => {
-    if (!validate()) return;
+  const handleSubmit = async (submitForReview: boolean) => {
+    if (!validate() || !attachedFile) return;
+
+    setUploadError('');
+    let finalFile: AttachedFile = attachedFile;
+
+    if (rawFile && r2Configured) {
+      setUploading(true);
+      setUploadProgress(0);
+      try {
+        const objectKey = await uploadFileToR2(rawFile, previewDocNumber, 'v1.0', setUploadProgress);
+        finalFile = {
+          ...attachedFile,
+          fileUrl: objectKey,
+        };
+      } catch (err: any) {
+        setUploadError(err?.message || '上傳檔案至 Cloudflare R2 失敗');
+        setUploading(false);
+        return;
+      } finally {
+        setUploading(false);
+      }
+    }
 
     const newDoc = createDocument({
       title: title.trim(),
@@ -79,7 +100,7 @@ export const CreateDocModal: React.FC<CreateDocModalProps> = ({
       department,
       description: description.trim(),
       revisionSummary: revisionSummary.trim(),
-      file: attachedFile,
+      file: finalFile,
       submitForReview,
     });
 
@@ -201,15 +222,19 @@ export const CreateDocModal: React.FC<CreateDocModalProps> = ({
 
           {/* File Upload Box */}
           <div>
-            <label className="font-semibold text-slate-700 block mb-1">
-              上傳實體文件檔案 (支援 PDF、Word、Excel) <span className="text-rose-500">*</span>
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="font-semibold text-slate-700">
+                上傳實體文件檔案 (支援 PDF、Word、Excel、圖檔或壓縮檔) <span className="text-rose-500">*</span>
+              </label>
+              <span className="text-[10px] font-mono text-slate-500">
+                {r2Configured ? 'Cloudflare R2 雲端儲存已就緒' : '尚未設定 R2 僅保留檔名紀錄'}
+              </span>
+            </div>
             <div className="border-2 border-dashed border-slate-300 hover:border-slate-400 rounded-lg p-4 text-center bg-slate-50/50 transition-colors">
               <input
                 type="file"
                 id="file-upload"
                 onChange={handleFileUpload}
-                accept=".pdf,.docx,.doc,.xlsx,.xls"
                 className="hidden"
               />
               <label
@@ -217,9 +242,9 @@ export const CreateDocModal: React.FC<CreateDocModalProps> = ({
                 className="cursor-pointer flex flex-col items-center gap-1.5"
               >
                 <Upload className="w-6 h-6 text-slate-400" />
-                <span className="font-medium text-slate-700">點擊上傳或拖曳檔案至此</span>
+                <span className="font-medium text-slate-700">點擊選擇實體檔案上傳</span>
                 <span className="text-[10px] text-slate-500">
-                  支援格式：PDF (.pdf)、Word (.docx)、Excel (.xlsx)
+                  支援 PDF、Word、Excel、PPT、CAD 圖檔或 ZIP 等任意格式
                 </span>
               </label>
 
@@ -234,7 +259,28 @@ export const CreateDocModal: React.FC<CreateDocModalProps> = ({
                   </span>
                 </div>
               )}
+
+              {uploading && (
+                <div className="mt-3 max-w-xs mx-auto space-y-1">
+                  <div className="flex justify-between text-[10px] font-mono text-blue-700">
+                    <span>正在上傳至 Cloudflare R2...</span>
+                    <span>{uploadProgress}%</span>
+                  </div>
+                  <div className="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
+                    <div
+                      className="bg-blue-600 h-1.5 transition-all duration-150"
+                      style={{ width: `${uploadProgress}%` }}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
+            {(errors.file || uploadError) && (
+              <p className="text-[11px] text-rose-500 mt-1 flex items-center gap-1">
+                <AlertCircle className="w-3 h-3" />
+                <span>{uploadError || errors.file}</span>
+              </p>
+            )}
           </div>
 
           {/* Mandatory Revision Summary */}
@@ -271,18 +317,20 @@ export const CreateDocModal: React.FC<CreateDocModalProps> = ({
           <div className="flex items-center gap-2">
             <button
               type="button"
+              disabled={uploading}
               onClick={() => handleSubmit(false)}
-              className="px-4 py-2 text-xs font-medium text-slate-700 bg-white hover:bg-slate-100 border border-slate-300 rounded-md transition-colors"
+              className="px-4 py-2 text-xs font-medium text-slate-700 bg-white hover:bg-slate-100 border border-slate-300 rounded-md transition-colors disabled:opacity-50"
             >
-              儲存為草稿
+              {uploading ? '上傳中...' : '儲存為草稿'}
             </button>
             <button
               type="button"
+              disabled={uploading}
               onClick={() => handleSubmit(true)}
-              className="px-4 py-2 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-md shadow-xs transition-colors flex items-center gap-1.5"
+              className="px-4 py-2 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-md shadow-xs transition-colors flex items-center gap-1.5 disabled:opacity-50"
             >
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-              <span>送出主管審核</span>
+              <span>{uploading ? `上傳中 (${uploadProgress}%)` : '送出主管審核'}</span>
             </button>
           </div>
         </div>

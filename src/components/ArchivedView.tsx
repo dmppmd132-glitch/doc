@@ -17,7 +17,7 @@ interface ArchivedViewProps {
 }
 
 export const ArchivedView: React.FC<ArchivedViewProps> = ({ onSelectDocument }) => {
-  const { documents, currentUser } = useDms();
+  const { documents, downloadDocumentFile } = useDms();
 
   // Find all versions with status '已作廢'
   const archivedItems = documents.flatMap((doc) => {
@@ -26,15 +26,8 @@ export const ArchivedView: React.FC<ArchivedViewProps> = ({ onSelectDocument }) 
       .map((version) => ({ doc, version }));
   });
 
-  const handleDownload = (doc: Document, version: DocVersion) => {
-    const blobContent = `APEX DMS - 歷史已作廢文件封存檔\n文件編號: ${doc.docNumber}\n文件名稱: ${doc.title}\n版次: ${version.version} (已作廢封存)\n現行最新生效版次: ${doc.currentVersion}\n下載人員: ${currentUser?.name || '使用者'}\n\n修訂摘要: ${version.revisionSummary}\n主管備註: ${version.reviewComment || '無'}`;
-    const blob = new Blob([blobContent], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = window.document.createElement('a');
-    link.href = url;
-    link.download = `[已作廢]_${doc.docNumber}_${version.version}.txt`;
-    link.click();
-    URL.revokeObjectURL(url);
+  const handleDownload = async (doc: Document, version: DocVersion) => {
+    await downloadDocumentFile(doc, version);
   };
 
   return (

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, Upload, FileCode, CheckCircle2, AlertCircle, Info, ArrowUpRight } from 'lucide-react';
 import { Document, AttachedFile } from '../types/dms';
 import { useDms } from '../context/DmsContext';
+import { uploadFileToR2, formatFileSize, detectFileExtensionType } from '../lib/r2Client';
 
 interface RevisionModalProps {
   document: Document | null;
@@ -16,18 +17,14 @@ export const RevisionModal: React.FC<RevisionModalProps> = ({
   onClose,
   onSuccess,
 }) => {
-  const { initiateRevision } = useDms();
+  const { initiateRevision, r2Configured } = useDms();
 
   const [versionType, setVersionType] = useState<'major' | 'minor'>('major');
   const [revisionSummary, setRevisionSummary] = useState('');
-  const [attachedFile, setAttachedFile] = useState<AttachedFile>({
-    name: document
-      ? `${document.docNumber}_v2.0_Revision.pdf`
-      : 'revised_document.pdf',
-    size: '2.8 MB',
-    type: 'pdf',
-    uploadDate: new Date().toLocaleDateString('zh-TW'),
-  });
+  const [rawFile, setRawFile] = useState<File | null>(null);
+  const [attachedFile, setAttachedFile] = useState<AttachedFile | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [error, setError] = useState('');
 
   if (!isOpen || !document) return null;
@@ -44,31 +41,51 @@ export const RevisionModal: React.FC<RevisionModalProps> = ({
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      let fileType: 'pdf' | 'docx' | 'xlsx' = 'pdf';
-      const ext = file.name.split('.').pop()?.toLowerCase();
-      if (ext === 'docx' || ext === 'doc') fileType = 'docx';
-      else if (ext === 'xlsx' || ext === 'xls') fileType = 'xlsx';
-
+      setRawFile(file);
+      setError('');
       setAttachedFile({
         name: file.name,
-        size: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
-        type: fileType,
+        size: formatFileSize(file.size),
+        type: detectFileExtensionType(file.name),
         uploadDate: new Date().toLocaleDateString('zh-TW'),
       });
     }
   };
 
-  const handleSubmit = (submitForReview: boolean) => {
+  const handleSubmit = async (submitForReview: boolean) => {
+    if (!attachedFile) {
+      setError('請選擇新版實體文件檔案');
+      return;
+    }
     if (!revisionSummary.trim()) {
       setError('請填寫本次改版修訂摘要說明（必填）');
       return;
+    }
+
+    let finalFile = attachedFile;
+    if (rawFile && r2Configured) {
+      setUploading(true);
+      setUploadProgress(0);
+      try {
+        const objectKey = await uploadFileToR2(rawFile, document.docNumber, targetVersion, setUploadProgress);
+        finalFile = {
+          ...attachedFile,
+          fileUrl: objectKey,
+        };
+      } catch (err: any) {
+        setError(err?.message || '上傳檔案至 Cloudflare R2 失敗');
+        setUploading(false);
+        return;
+      } finally {
+        setUploading(false);
+      }
     }
 
     initiateRevision({
       docId: document.id,
       versionType,
       revisionSummary: revisionSummary.trim(),
-      file: attachedFile,
+      file: finalFile,
       submitForReview,
     });
 
@@ -168,15 +185,19 @@ export const RevisionModal: React.FC<RevisionModalProps> = ({
 
           {/* File Upload for New Revision */}
           <div>
-            <label className="font-semibold text-slate-700 block mb-1">
-              上傳新版實體檔案 (PDF, Word, Excel) <span className="text-rose-500">*</span>
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="font-semibold text-slate-700">
+                上傳新版實體檔案 <span className="text-rose-500">*</span>
+              </label>
+              <span className="text-[10px] font-mono text-slate-500">
+                {r2Configured ? 'Cloudflare R2 雲端儲存已就緒' : '僅保留檔名紀錄'}
+              </span>
+            </div>
             <div className="border-2 border-dashed border-slate-300 rounded-lg p-3.5 text-center bg-slate-50/50">
               <input
                 type="file"
                 id="revision-file-upload"
                 onChange={handleFileUpload}
-                accept=".pdf,.docx,.doc,.xlsx,.xls"
                 className="hidden"
               />
               <label
@@ -198,6 +219,21 @@ export const RevisionModal: React.FC<RevisionModalProps> = ({
                   <span className="text-[10px] text-slate-500 font-mono">
                     ({attachedFile.size})
                   </span>
+                </div>
+              )}
+
+              {uploading && (
+                <div className="mt-2 max-w-xs mx-auto space-y-1">
+                  <div className="flex justify-between text-[10px] font-mono text-blue-700">
+                    <span>正在上傳新版至 R2...</span>
+                    <span>{uploadProgress}%</span>
+                  </div>
+                  <div className="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
+                    <div
+                      className="bg-blue-600 h-1.5 transition-all duration-150"
+                      style={{ width: `${uploadProgress}%` }}
+                    />
+                  </div>
                 </div>
               )}
             </div>
@@ -240,18 +276,20 @@ export const RevisionModal: React.FC<RevisionModalProps> = ({
           <div className="flex items-center gap-2">
             <button
               type="button"
+              disabled={uploading}
               onClick={() => handleSubmit(false)}
-              className="px-4 py-2 text-xs font-medium text-slate-700 bg-white hover:bg-slate-100 border border-slate-300 rounded-md transition-colors"
+              className="px-4 py-2 text-xs font-medium text-slate-700 bg-white hover:bg-slate-100 border border-slate-300 rounded-md transition-colors disabled:opacity-50"
             >
               儲存為改版草稿
             </button>
             <button
               type="button"
+              disabled={uploading}
               onClick={() => handleSubmit(true)}
-              className="px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-md shadow-xs transition-colors flex items-center gap-1.5"
+              className="px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-md shadow-xs transition-colors flex items-center gap-1.5 disabled:opacity-50"
             >
               <CheckCircle2 className="w-3.5 h-3.5" />
-              <span>送出改版審核 ({targetVersion})</span>
+              <span>{uploading ? `上傳中 (${uploadProgress}%)` : `送出改版審核 (${targetVersion})`}</span>
             </button>
           </div>
         </div>
