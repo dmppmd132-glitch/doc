@@ -158,10 +158,13 @@ as $$
   select email
   from public.profiles
   where lower(trim(name)) = lower(trim(lookup_name))
+     or lower(split_part(email, '@', 1)) = lower(trim(lookup_name))
   limit 1;
 $$;
 
 grant execute on function public.get_email_by_name(text) to anon, authenticated;
+grant usage on schema public to anon, authenticated;
+grant select on public.profiles to anon, authenticated;
 
 -- 6. 開啟 Row Level Security (RLS)
 alter table public.profiles enable row level security;
@@ -175,6 +178,9 @@ create policy "允許登入查詢與已登入成員讀取人員設定檔"
   on public.profiles for select
   to anon, authenticated
   using (true);
+
+-- 立即重整 PostgREST API 快取
+notify pgrst, 'reload schema';
 
 drop policy if exists "允許使用者更新自己的設定檔" on public.profiles;
 create policy "允許使用者更新自己的設定檔"

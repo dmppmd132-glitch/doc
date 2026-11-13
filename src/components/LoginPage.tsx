@@ -315,8 +315,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
             </button>
           </form>
 
-          {/* Quick Fill by Member Name */}
-          {!isSignUp && (
+          {/* Quick Fill by Member Name (Local simulation mode only) */}
+          {!isSignUp && !supabaseReady && (
             <div className="mt-6 pt-4 border-t border-slate-200">
               <span className="text-[11px] font-semibold text-slate-500 block mb-2">
                 成員名稱快速帶入（點擊自動填寫名稱與密碼）：

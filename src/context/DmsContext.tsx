@@ -235,10 +235,15 @@ export const DmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           if (rpcEmail && typeof rpcEmail === 'string') {
             userEmail = rpcEmail;
           } else {
-            console.error('查詢 profiles 失敗：', profileError?.message || rpcError?.message);
+            const detail = rpcError?.message || profileError?.message || '';
+            console.error('查詢 profiles 失敗：', { profileError, rpcError });
+            if (detail) {
+              return {
+                error: `依姓名查詢失敗 (${detail})。請確認已在 Supabase SQL Editor 執行最新授權 SQL。`,
+              };
+            }
             return {
-              error:
-                '查無此成員名稱！請確認：(1) Supabase profiles 資料表內有該姓名；(2) 已執行最新 SQL 允許未登入查詢或建立 get_email_by_name 函式。',
+              error: `資料庫查詢正常，但 profiles 資料表中找不到姓名「${cleanName}」。請至 Supabase > Table Editor > profiles 確認該帳號的 name 欄位內容。`,
             };
           }
         }
