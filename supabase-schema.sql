@@ -227,6 +227,18 @@ create policy "文件更新權限（主管與撰寫人）"
     )
   );
 
+drop policy if exists "文件刪除草稿權限（主管與撰寫人）" on public.documents;
+create policy "文件刪除草稿權限（主管與撰寫人）"
+  on public.documents for delete
+  to authenticated
+  using (
+    exists (
+      select 1 from public.profiles
+      where profiles.id = auth.uid()
+      and profiles.role in ('Approver', 'Editor')
+    )
+  );
+
 -- document_versions 存取策略：
 drop policy if exists "版本紀錄查詢權限控制" on public.document_versions;
 create policy "版本紀錄查詢權限控制"

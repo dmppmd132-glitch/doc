@@ -76,7 +76,9 @@ export const TeamDirectoryModal: React.FC<TeamDirectoryModalProps> = ({
 
           {/* Members Table */}
           <div>
-            <h4 className="font-bold text-slate-900 mb-2">10 人組織成員名冊</h4>
+            <h4 className="font-bold text-slate-900 mb-2">
+              組織成員名冊（共 {teamMembers.length} 位）
+            </h4>
             <div className="border border-slate-200 rounded-lg overflow-hidden">
               <table className="w-full text-left">
                 <thead className="bg-slate-100 text-slate-700 text-xs font-semibold">
@@ -89,7 +91,14 @@ export const TeamDirectoryModal: React.FC<TeamDirectoryModalProps> = ({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 text-xs">
-                  {teamMembers.map((member) => {
+                  {teamMembers.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="p-8 text-center text-slate-400">
+                        目前尚無成員資料，新成員註冊登入後將自動同步顯示於此處。
+                      </td>
+                    </tr>
+                  ) : (
+                    teamMembers.map((member) => {
                     const isCurrent = currentUser?.id === member.id || currentUser?.email === member.email;
                     return (
                       <tr
@@ -157,7 +166,8 @@ export const TeamDirectoryModal: React.FC<TeamDirectoryModalProps> = ({
                         </td>
                       </tr>
                     );
-                  })}
+                  })
+                  )}
                 </tbody>
               </table>
             </div>

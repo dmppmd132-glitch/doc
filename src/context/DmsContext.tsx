@@ -1,13 +1,25 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, Document, DocVersion, AttachedFile, DocType, Department, DocStatus, Role } from '../types/dms';
-import { TEAM_MEMBERS, INITIAL_DOCUMENTS, DEPARTMENT_CODES } from '../data/initialData';
+import { DEPARTMENT_CODES } from '../data/initialData';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
-const STORAGE_KEY_DOCS = 'apex_dms_documents_v2';
-const STORAGE_KEY_AUTH_USER = 'apex_dms_auth_user_v2';
+const STORAGE_KEY_DOCS = 'apex_dms_documents_v3';
+const STORAGE_KEY_AUTH_USER = 'apex_dms_auth_user_v3';
 
 function formatNow(): string {
   const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  const hours = String(d.getHours()).padStart(2, '0');
+  const minutes = String(d.getMinutes()).padStart(2, '0');
+  return `${year}-${month}-${day} ${hours}:${minutes}`;
+}
+
+function formatDbTimestamp(ts?: string | null): string {
+  if (!ts) return formatNow();
+  const d = new Date(ts);
+  if (isNaN(d.getTime())) return ts;
   const year = d.getFullYear();
   const month = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
@@ -51,7 +63,6 @@ interface DmsContextType {
   documents: Document[];
   pendingReviewCount: number;
   loginWithSupabase: (email: string, password: string, signUpData?: SignUpMetadata) => Promise<{ error?: string }>;
-  loginWithLocal: (email: string, password?: string) => boolean;
   logout: () => Promise<void>;
   generateDocNumber: (docType: DocType, department: Department) => string;
   createDocument: (input: CreateDocInput) => Document;
@@ -61,7 +72,6 @@ interface DmsContextType {
   resubmitDraft: (docId: string, versionId: string, summary: string, file?: AttachedFile) => void;
   saveDraft: (docId: string, versionId: string, data: Partial<DocVersion>) => void;
   deleteDocumentDraft: (docId: string) => void;
-  resetToSeedData: () => void;
   getActiveVersion: (doc: Document) => DocVersion | undefined;
   getPendingVersion: (doc: Document) => DocVersion | undefined;
 }
@@ -69,7 +79,17 @@ interface DmsContextType {
 const DmsContext = createContext<DmsContextType | null>(null);
 
 export const DmsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Current user state (starts with saved user or null requiring login)
+  // Clean up legacy v2 demo cache on mount
+  useEffect(() => {
+    try {
+      localStorage.removeItem('apex_dms_documents_v2');
+      localStorage.removeItem('apex_dms_auth_user_v2');
+    } catch {
+      // ignore storage access errors
+    }
+  }, []);
+
+  // Current user state (starts as null, requiring real login)
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY_AUTH_USER);
@@ -79,13 +99,19 @@ export const DmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch (e) {
       console.warn('Failed to load saved auth user', e);
     }
-    return TEAM_MEMBERS[0]; // Default logged-in user: 王建國 (Approver)
+    return null;
   });
 
   const isAuthenticated = currentUser !== null;
 
-  // Documents state
+  // Real team members loaded from Supabase profiles
+  const [teamMembers, setTeamMembers] = useState<User[]>([]);
+
+  // Documents state (starts completely empty)
   const [documents, setDocuments] = useState<Document[]>(() => {
+    if (isSupabaseConfigured()) {
+      return [];
+    }
     try {
       const saved = localStorage.getItem(STORAGE_KEY_DOCS);
       if (saved) {
@@ -94,15 +120,110 @@ export const DmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch (e) {
       console.warn('Failed to load saved documents', e);
     }
-    return INITIAL_DOCUMENTS;
+    return [];
   });
+
+  // Load real profiles & documents from Supabase
+  const loadSupabaseWorkspace = async () => {
+    if (!isSupabaseConfigured()) return;
+
+    try {
+      const { data: profilesData, error: profilesErr } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('created_at', { ascending: true });
+
+      if (!profilesErr && profilesData) {
+        const mappedMembers: User[] = profilesData.map((p: any) => ({
+          id: p.id,
+          name: p.name,
+          title: p.title || '專員',
+          role: p.role as Role,
+          roleLabel:
+            p.role_label ||
+            (p.role === 'Approver' ? '審核主管' : p.role === 'Editor' ? '撰寫人' : '一般員工'),
+          department: p.department as Department,
+          email: p.email,
+          avatarColor: p.avatar_color || 'bg-slate-700',
+        }));
+        setTeamMembers(mappedMembers);
+      }
+
+      const { data: docsData, error: docsErr } = await supabase
+        .from('documents')
+        .select('*')
+        .order('updated_at', { ascending: false });
+
+      const { data: versData, error: versErr } = await supabase
+        .from('document_versions')
+        .select('*')
+        .order('submitted_at', { ascending: false });
+
+      if (!docsErr && docsData) {
+        const versionsByDocId: Record<string, DocVersion[]> = {};
+        if (!versErr && versData) {
+          versData.forEach((v: any) => {
+            const mappedVer: DocVersion = {
+              id: v.id,
+              docId: v.doc_id,
+              docNumber: v.doc_number,
+              version: v.version,
+              title: v.title,
+              revisionSummary: v.revision_summary,
+              file: {
+                name: v.file_name,
+                size: v.file_size,
+                type: (v.file_type || 'pdf') as AttachedFile['type'],
+                uploadDate: formatDbTimestamp(v.submitted_at),
+              },
+              status: v.status as DocStatus,
+              author: v.author,
+              authorId: v.author_id,
+              submittedAt: formatDbTimestamp(v.submitted_at),
+              approver: v.approver,
+              approverId: v.approver_id,
+              reviewComment: v.review_comment,
+              reviewedAt: v.reviewed_at ? formatDbTimestamp(v.reviewed_at) : null,
+              effectiveAt: v.effective_at ? formatDbTimestamp(v.effective_at) : null,
+              documentBody: v.document_body || undefined,
+            };
+            if (!versionsByDocId[v.doc_id]) {
+              versionsByDocId[v.doc_id] = [];
+            }
+            versionsByDocId[v.doc_id].push(mappedVer);
+          });
+        }
+
+        const mappedDocs: Document[] = docsData.map((d: any) => ({
+          id: d.id,
+          docNumber: d.doc_number,
+          title: d.title,
+          docType: d.doc_type as DocType,
+          department: d.department as Department,
+          departmentCode: d.department_code,
+          currentVersion: d.current_version,
+          status: d.status as DocStatus,
+          createdBy: d.created_by,
+          createdById: d.created_by_id,
+          approvedBy: d.approved_by,
+          createdAt: formatDbTimestamp(d.created_at),
+          updatedAt: formatDbTimestamp(d.updated_at),
+          description: d.description || '',
+          versions: versionsByDocId[d.id] || [],
+        }));
+
+        setDocuments(mappedDocs);
+      }
+    } catch (err) {
+      console.error('Failed to load Supabase workspace:', err);
+    }
+  };
 
   // Check Supabase session on startup if configured
   useEffect(() => {
     if (isSupabaseConfigured()) {
       supabase.auth.getSession().then(({ data: { session } }) => {
         if (session?.user) {
-          // Fetch user profile from Supabase profiles table
           supabase
             .from('profiles')
             .select('*')
@@ -122,15 +243,22 @@ export const DmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 };
                 setCurrentUser(userObj);
                 localStorage.setItem(STORAGE_KEY_AUTH_USER, JSON.stringify(userObj));
+                loadSupabaseWorkspace();
               }
             });
+        } else {
+          setCurrentUser(null);
+          setDocuments([]);
+          setTeamMembers([]);
+          localStorage.removeItem(STORAGE_KEY_AUTH_USER);
         }
       });
     }
   }, []);
 
-  // Save documents to local storage on change
+  // Save documents to local storage only in non-Supabase mode
   useEffect(() => {
+    if (isSupabaseConfigured()) return;
     try {
       localStorage.setItem(STORAGE_KEY_DOCS, JSON.stringify(documents));
     } catch (e) {
@@ -203,6 +331,7 @@ export const DmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         };
         setCurrentUser(userObj);
         localStorage.setItem(STORAGE_KEY_AUTH_USER, JSON.stringify(userObj));
+        await loadSupabaseWorkspace();
       }
       return {};
     } else {
@@ -293,26 +422,10 @@ export const DmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
         setCurrentUser(userObj);
         localStorage.setItem(STORAGE_KEY_AUTH_USER, JSON.stringify(userObj));
+        await loadSupabaseWorkspace();
       }
       return {};
     }
-  };
-
-  // Local simulated login with team accounts (supports Name or Email)
-  const loginWithLocal = (nameOrEmail: string, _password?: string): boolean => {
-    const q = nameOrEmail.trim().toLowerCase();
-    const found = TEAM_MEMBERS.find(
-      (m) =>
-        m.name.toLowerCase() === q ||
-        m.email.toLowerCase() === q ||
-        m.email.split('@')[0].toLowerCase() === q
-    );
-    if (found) {
-      setCurrentUser(found);
-      localStorage.setItem(STORAGE_KEY_AUTH_USER, JSON.stringify(found));
-      return true;
-    }
-    return false;
   };
 
   // Logout
@@ -325,6 +438,8 @@ export const DmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     }
     setCurrentUser(null);
+    setDocuments([]);
+    setTeamMembers([]);
     localStorage.removeItem(STORAGE_KEY_AUTH_USER);
   };
 
@@ -532,6 +647,32 @@ export const DmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         };
       })
     );
+
+    if (isSupabaseConfigured()) {
+      const isoNow = new Date().toISOString();
+      supabase
+        .from('documents')
+        .update({ updated_at: isoNow })
+        .eq('id', doc.id)
+        .then(() => {
+          supabase.from('document_versions').insert({
+            id: newVersion.id,
+            doc_id: doc.id,
+            doc_number: newVersion.docNumber,
+            version: newVersion.version,
+            title: newVersion.title,
+            revision_summary: newVersion.revisionSummary,
+            file_name: newVersion.file.name,
+            file_size: newVersion.file.size,
+            file_type: newVersion.file.type,
+            status: newVersion.status,
+            author: newVersion.author,
+            author_id: newVersion.authorId,
+            submitted_at: isoNow,
+            document_body: newVersion.documentBody,
+          });
+        });
+    }
   };
 
   // Approve Version (主管核准自動升版與舊版作廢)
@@ -571,6 +712,46 @@ export const DmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
           return ver;
         });
+
+        if (isSupabaseConfigured()) {
+          const isoNow = new Date().toISOString();
+          supabase
+            .from('documents')
+            .update({
+              current_version: targetVersion.version,
+              status: '已生效',
+              approved_by: approverName,
+              updated_at: isoNow,
+            })
+            .eq('id', docId)
+            .then();
+
+          updatedVersions.forEach((v) => {
+            if (v.id === versionId) {
+              supabase
+                .from('document_versions')
+                .update({
+                  status: '已生效',
+                  approver: approverName,
+                  approver_id: approverId,
+                  review_comment: v.reviewComment,
+                  reviewed_at: isoNow,
+                  effective_at: isoNow,
+                })
+                .eq('id', v.id)
+                .then();
+            } else if (v.status === '已作廢') {
+              supabase
+                .from('document_versions')
+                .update({
+                  status: '已作廢',
+                  review_comment: v.reviewComment,
+                })
+                .eq('id', v.id)
+                .then();
+            }
+          });
+        }
 
         return {
           ...doc,
@@ -614,10 +795,31 @@ export const DmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         });
 
         const hasActiveVer = updatedVersions.some((v) => v.status === '已生效');
+        const nextDocStatus: DocStatus = hasActiveVer ? '已生效' : '草稿';
+
+        if (isSupabaseConfigured()) {
+          const isoNow = new Date().toISOString();
+          supabase
+            .from('documents')
+            .update({ status: nextDocStatus, updated_at: isoNow })
+            .eq('id', docId)
+            .then();
+          supabase
+            .from('document_versions')
+            .update({
+              status: '草稿',
+              approver: approverName,
+              approver_id: approverId,
+              review_comment: `【退回意見】${comment.trim()}`,
+              reviewed_at: isoNow,
+            })
+            .eq('id', versionId)
+            .then();
+        }
 
         return {
           ...doc,
-          status: hasActiveVer ? '已生效' : '草稿',
+          status: nextDocStatus,
           updatedAt: now,
           versions: updatedVersions,
         };
@@ -652,10 +854,36 @@ export const DmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         });
 
         const hasActiveVer = updatedVersions.some((v) => v.status === '已生效');
+        const nextDocStatus: DocStatus = hasActiveVer ? '已生效' : '審核中';
+
+        if (isSupabaseConfigured()) {
+          const isoNow = new Date().toISOString();
+          const targetVer = updatedVersions.find((v) => v.id === versionId);
+          supabase
+            .from('documents')
+            .update({ status: nextDocStatus, updated_at: isoNow })
+            .eq('id', docId)
+            .then();
+          if (targetVer) {
+            supabase
+              .from('document_versions')
+              .update({
+                status: '審核中',
+                revision_summary: summary,
+                file_name: targetVer.file.name,
+                file_size: targetVer.file.size,
+                file_type: targetVer.file.type,
+                submitted_at: isoNow,
+                review_comment: null,
+              })
+              .eq('id', versionId)
+              .then();
+          }
+        }
 
         return {
           ...doc,
-          status: hasActiveVer ? '已生效' : '審核中',
+          status: nextDocStatus,
           updatedAt: now,
           versions: updatedVersions,
         };
@@ -675,6 +903,19 @@ export const DmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
           return ver;
         });
+
+        if (isSupabaseConfigured()) {
+          const isoNow = new Date().toISOString();
+          supabase.from('documents').update({ updated_at: isoNow }).eq('id', docId).then();
+          const updatePayload: Record<string, any> = {};
+          if (data.revisionSummary !== undefined) updatePayload.revision_summary = data.revisionSummary;
+          if (data.title !== undefined) updatePayload.title = data.title;
+          if (data.documentBody !== undefined) updatePayload.document_body = data.documentBody;
+          if (Object.keys(updatePayload).length > 0) {
+            supabase.from('document_versions').update(updatePayload).eq('id', versionId).then();
+          }
+        }
+
         return {
           ...doc,
           updatedAt: now,
@@ -687,13 +928,9 @@ export const DmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Delete document draft
   const deleteDocumentDraft = (docId: string) => {
     setDocuments((prev) => prev.filter((d) => d.id !== docId));
-  };
-
-  // Reset to default seed data
-  const resetToSeedData = () => {
-    setDocuments(INITIAL_DOCUMENTS);
-    setCurrentUser(TEAM_MEMBERS[0]);
-    localStorage.removeItem(STORAGE_KEY_DOCS);
+    if (isSupabaseConfigured()) {
+      supabase.from('documents').delete().eq('id', docId).then();
+    }
   };
 
   return (
@@ -701,11 +938,10 @@ export const DmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       value={{
         currentUser,
         isAuthenticated,
-        teamMembers: TEAM_MEMBERS,
+        teamMembers,
         documents,
         pendingReviewCount,
         loginWithSupabase,
-        loginWithLocal,
         logout,
         generateDocNumber,
         createDocument,
@@ -715,7 +951,6 @@ export const DmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         resubmitDraft,
         saveDraft,
         deleteDocumentDraft,
-        resetToSeedData,
         getActiveVersion,
         getPendingVersion,
       }}

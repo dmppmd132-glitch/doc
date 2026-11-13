@@ -9,7 +9,6 @@ import {
   ShieldCheck,
   Building2,
   LogOut,
-  RotateCcw,
   KeyRound
 } from 'lucide-react';
 import { useDms } from '../context/DmsContext';
@@ -30,7 +29,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenCreate,
   onOpenTeamModal,
 }) => {
-  const { currentUser, pendingReviewCount, resetToSeedData, logout } = useDms();
+  const { currentUser, pendingReviewCount, logout } = useDms();
 
   const getRoleBadge = (role?: Role) => {
     switch (role) {
@@ -241,20 +240,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {currentUser?.role === 'Editor' && '您以「撰寫人」身分登入，可起草文件與發起改版申請，送審期間舊版維持已生效。'}
           {currentUser?.role === 'Approver' && '您以「審核主管」身分登入，具備待辦審核、核准自動升版與舊版封存全權限。'}
         </p>
-
-        <div className="mt-3 pt-2 border-t border-slate-200 flex items-center justify-between">
-          <button
-            onClick={() => {
-              if (confirm('確定要還原至系統初始示範資料嗎？')) {
-                resetToSeedData();
-              }
-            }}
-            className="flex items-center gap-1 text-[10px] text-slate-500 hover:text-slate-700"
-          >
-            <RotateCcw className="w-3 h-3" />
-            <span>還原預設示範資料</span>
-          </button>
-        </div>
       </div>
     </aside>
   );

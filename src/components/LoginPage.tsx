@@ -19,7 +19,7 @@ interface LoginPageProps {
 }
 
 export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
-  const { loginWithSupabase, loginWithLocal } = useDms();
+  const { loginWithSupabase } = useDms();
   const [isSignUp, setIsSignUp] = useState(false);
 
   const [name, setName] = useState('');
@@ -34,12 +34,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
   const [successMsg, setSuccessMsg] = useState('');
 
   const supabaseReady = isSupabaseConfigured();
-
-  const handleQuickFill = (presetName: string) => {
-    setName(presetName);
-    setPassword('apex1234');
-    setErrorMsg('');
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     console.log("登入按鈕被點擊了！", { name: name.trim(), passwordLength: password.length, isSignUp });
@@ -67,42 +61,30 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
     setLoading(true);
 
     try {
-      if (supabaseReady) {
-        console.log("【發送 Supabase 請求】偵測到 VITE_SUPABASE_URL，正在向 Supabase 伺服器發送網路請求...");
-        const res = await loginWithSupabase(
-          name.trim(),
-          password,
-          isSignUp
-            ? {
-                name: name.trim(),
-                email: email.trim(),
-                title: title.trim() || '專員',
-                role,
-                department,
-              }
-            : undefined
-        );
-        if (res.error) {
-          setErrorMsg(res.error);
-        } else {
-          setSuccessMsg(isSignUp ? '註冊成功！帳號已建立，正在載入權限...' : '驗證通過，正在進入系統...');
-          setTimeout(() => onLoginSuccess(), 400);
-        }
+      if (!supabaseReady) {
+        setErrorMsg('尚未設定 Supabase 連線環境變數 (VITE_SUPABASE_URL / VITE_SUPABASE_PUBLISHABLE_KEY)');
+        return;
+      }
+
+      console.log("【發送 Supabase 請求】偵測到 VITE_SUPABASE_URL，正在向 Supabase 伺服器發送網路請求...");
+      const res = await loginWithSupabase(
+        name.trim(),
+        password,
+        isSignUp
+          ? {
+              name: name.trim(),
+              email: email.trim(),
+              title: title.trim() || '專員',
+              role,
+              department,
+            }
+          : undefined
+      );
+      if (res.error) {
+        setErrorMsg(res.error);
       } else {
-        console.warn(
-          "【注意：當前為本機模擬模式，無 Network 請求】\n" +
-          "目前專案尚未在環境變數 (.env) 中設定有效的 VITE_SUPABASE_URL 與 VITE_SUPABASE_PUBLISHABLE_KEY。\n" +
-          "因此系統走內部成員模擬驗證（不會向外部網路發送 fetch 請求）。\n" +
-          "若需在 Network 分頁看見 Supabase 網路請求，請建立 .env 檔案填入真實的 Supabase 專案網址與 Key！"
-        );
-        // Local simulation with team accounts by Name
-        const success = loginWithLocal(name.trim(), password);
-        if (success) {
-          setSuccessMsg('驗證成功，正在進入系統...');
-          setTimeout(() => onLoginSuccess(), 300);
-        } else {
-          setErrorMsg('查無此成員名稱或密碼不正確。請輸入如「王建國」、「林哲宇」或「陳俊霖」，或點擊下方測試按鈕快速帶入。');
-        }
+        setSuccessMsg(isSignUp ? '註冊成功！帳號已建立，正在載入權限...' : '驗證通過，正在進入系統...');
+        setTimeout(() => onLoginSuccess(), 400);
       }
     } catch (err: any) {
       setErrorMsg(err.message || '登入程序發生錯誤');
@@ -139,10 +121,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
             ) : (
               <div>
                 <span className="font-semibold text-slate-800">
-                  Supabase 整合模式啟動中：
+                  Supabase 尚未設定連線參數：
                 </span>
                 <span className="text-slate-500 block mt-0.5">
-                  已內建 `@supabase/supabase-js` 客戶端。設定環境變數即可即時同步雲端資料庫；亦可使用下方預設 10 人成員名稱直接登入驗證。
+                  請於環境變數設定 VITE_SUPABASE_URL 與 VITE_SUPABASE_PUBLISHABLE_KEY 後即可連線登入與同步雲端資料庫。
                 </span>
               </div>
             )}
@@ -209,7 +191,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="請輸入成員姓名 (如：王建國、林哲宇、陳俊霖)"
+                  placeholder="請輸入成員名稱或 Email"
                   required
                   className="w-full pl-9 pr-3 py-2 bg-slate-50 focus:bg-white border border-slate-300 focus:border-slate-900 rounded-md outline-none transition-colors"
                 />
@@ -314,58 +296,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
               )}
             </button>
           </form>
-
-          {/* Quick Fill by Member Name (Local simulation mode only) */}
-          {!isSignUp && !supabaseReady && (
-            <div className="mt-6 pt-4 border-t border-slate-200">
-              <span className="text-[11px] font-semibold text-slate-500 block mb-2">
-                成員名稱快速帶入（點擊自動填寫名稱與密碼）：
-              </span>
-              <div className="space-y-1.5">
-                <button
-                  type="button"
-                  onClick={() => handleQuickFill('王建國')}
-                  className="w-full p-2 bg-purple-50 hover:bg-purple-100/70 border border-purple-200 rounded text-left flex items-center justify-between text-[11px] text-purple-900 transition-colors"
-                >
-                  <div>
-                    <strong className="block text-purple-950">王建國 (審核主管 · QA)</strong>
-                    <span className="text-purple-700 font-mono text-[10px]">密碼預設: apex1234</span>
-                  </div>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-200/80 font-medium text-purple-800">
-                    具核准/退回權限
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleQuickFill('林哲宇')}
-                  className="w-full p-2 bg-blue-50 hover:bg-blue-100/70 border border-blue-200 rounded text-left flex items-center justify-between text-[11px] text-blue-900 transition-colors"
-                >
-                  <div>
-                    <strong className="block text-blue-950">林哲宇 (撰寫人 · ME)</strong>
-                    <span className="text-blue-700 font-mono text-[10px]">密碼預設: apex1234</span>
-                  </div>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-200/80 font-medium text-blue-800">
-                    可起草與改版送審
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleQuickFill('陳俊霖')}
-                  className="w-full p-2 bg-slate-100 hover:bg-slate-200/70 border border-slate-200 rounded text-left flex items-center justify-between text-[11px] text-slate-800 transition-colors"
-                >
-                  <div>
-                    <strong className="block text-slate-900">陳俊霖 (一般員工 · PM)</strong>
-                    <span className="text-slate-600 font-mono text-[10px]">密碼預設: apex1234</span>
-                  </div>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-200 font-medium text-slate-700">
-                    僅可查閱已生效正本
-                  </span>
-                </button>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Footer info */}
