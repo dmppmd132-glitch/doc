@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, Document, DocVersion, AttachedFile, DocType, Department, DocStatus, Role } from '../types/dms';
 import { DEPARTMENT_CODES } from '../data/initialData';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
-import { checkR2Status, getR2DownloadUrl } from '../lib/r2Client';
+import { checkR2Status, getR2DownloadUrl, getSupabaseDownloadUrl } from '../lib/r2Client';
 
 const STORAGE_KEY_DOCS = 'apex_dms_documents_v3';
 const STORAGE_KEY_AUTH_USER = 'apex_dms_auth_user_v3';
@@ -945,11 +945,13 @@ export const DmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  // Download file (uses Cloudflare R2 Presigned URL when fileUrl is present)
+  // Download file (supports both sb:// Supabase Storage pilot files and R2/Backblaze B2 Presigned URLs)
   const downloadDocumentFile = async (doc: Document, version: DocVersion) => {
     if (version.file.fileUrl) {
       try {
-        const downloadUrl = await getR2DownloadUrl(version.file.fileUrl, version.file.name);
+        const downloadUrl = version.file.fileUrl.startsWith('sb://')
+          ? await getSupabaseDownloadUrl(version.file.fileUrl, version.file.name)
+          : await getR2DownloadUrl(version.file.fileUrl, version.file.name);
         const link = window.document.createElement('a');
         link.href = downloadUrl;
         link.download = version.file.name;
@@ -959,13 +961,13 @@ export const DmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         window.document.body.removeChild(link);
         return;
       } catch (err: any) {
-        alert(err?.message || '從 Cloudflare R2 下載檔案失敗，請確認環境變數設定');
+        alert(err?.message || '從雲端儲存下載檔案失敗，請確認儲存空間與權限設定');
         return;
       }
     }
 
-    // Fallback summary when no binary file was uploaded to R2
-    const blobContent = `--- APEX DMS 文件摘要 ---\n文件編號: ${doc.docNumber}\n文件名稱: ${doc.title}\n版次: ${version.version}\n檔案名稱: ${version.file.name}\n下載人員: ${currentUser?.name || '使用者'}\n下載時間: ${new Date().toLocaleString('zh-TW')}\n\n[修訂摘要]\n${version.revisionSummary}\n\n(提示：此版本建立時未上傳實體原檔至 Cloudflare R2)`;
+    // Fallback summary when no binary file was uploaded
+    const blobContent = `--- APEX DMS 文件摘要 ---\n文件編號: ${doc.docNumber}\n文件名稱: ${doc.title}\n版次: ${version.version}\n檔案名稱: ${version.file.name}\n下載人員: ${currentUser?.name || '使用者'}\n下載時間: ${new Date().toLocaleString('zh-TW')}\n\n[修訂摘要]\n${version.revisionSummary}\n\n(提示：此版本建立時未上傳實體原檔)`;
     const blob = new Blob([blobContent], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = window.document.createElement('a');

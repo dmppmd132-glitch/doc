@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { X, Upload, FileCode, CheckCircle2, AlertTriangle, Send } from 'lucide-react';
 import { Document, DocVersion, AttachedFile } from '../types/dms';
 import { useDms } from '../context/DmsContext';
-import { uploadFileToR2, formatFileSize, detectFileExtensionType } from '../lib/r2Client';
+import { uploadDocumentBinary, formatFileSize, detectFileExtensionType } from '../lib/r2Client';
+import { isSupabaseConfigured } from '../lib/supabase';
 
 interface ResubmitModalProps {
   document: Document | null;
@@ -58,17 +59,25 @@ export const ResubmitModal: React.FC<ResubmitModalProps> = ({
     }
 
     let finalFile = file;
-    if (rawFile && r2Configured) {
+    if (rawFile && (r2Configured || isSupabaseConfigured())) {
       setUploading(true);
       setUploadProgress(0);
       try {
-        const objectKey = await uploadFileToR2(rawFile, document.docNumber, version.version, setUploadProgress);
-        finalFile = {
-          ...file,
-          fileUrl: objectKey,
-        };
+        const storedUrl = await uploadDocumentBinary(
+          rawFile,
+          document.docNumber,
+          version.version,
+          r2Configured,
+          setUploadProgress
+        );
+        if (storedUrl) {
+          finalFile = {
+            ...file,
+            fileUrl: storedUrl,
+          };
+        }
       } catch (err: any) {
-        setError(err?.message || '上傳檔案至 Cloudflare R2 失敗');
+        setError(err?.message || '上傳修正檔案失敗，請稍後再試');
         setUploading(false);
         return;
       } finally {
@@ -165,7 +174,9 @@ export const ResubmitModal: React.FC<ResubmitModalProps> = ({
               {uploading && (
                 <div className="mt-2 space-y-1">
                   <div className="flex justify-between text-[10px] font-mono text-amber-700">
-                    <span>正在上傳修正檔案至 R2...</span>
+                    <span>
+                      {r2Configured ? '正在上傳修正檔案至雲端儲存...' : '正在上傳修正檔案至 Supabase...'}
+                    </span>
                     <span>{uploadProgress}%</span>
                   </div>
                   <div className="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">

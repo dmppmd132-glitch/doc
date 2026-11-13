@@ -276,3 +276,41 @@ create policy "版本紀錄更新審核權限"
       and profiles.role in ('Approver', 'Editor')
     )
   );
+
+-- 7. 建立 Supabase Storage 試行儲存桶 (dms-files，單檔上限 50MB，總容量 1GB 免費)
+insert into storage.buckets (id, name, public, file_size_limit)
+values ('dms-files', 'dms-files', false, 52428800)
+on conflict (id) do update set file_size_limit = 52428800;
+
+drop policy if exists "允許已登入成員讀取 dms-files" on storage.objects;
+create policy "允許已登入成員讀取 dms-files"
+  on storage.objects for select
+  to authenticated
+  using (bucket_id = 'dms-files');
+
+drop policy if exists "允許主管與撰寫人上傳 dms-files" on storage.objects;
+create policy "允許主管與撰寫人上傳 dms-files"
+  on storage.objects for insert
+  to authenticated
+  with check (
+    bucket_id = 'dms-files'
+    and exists (
+      select 1 from public.profiles
+      where profiles.id = auth.uid()
+      and profiles.role in ('Approver', 'Editor')
+    )
+  );
+
+drop policy if exists "允許主管與撰寫人更新 dms-files" on storage.objects;
+create policy "允許主管與撰寫人更新 dms-files"
+  on storage.objects for update
+  to authenticated
+  using (
+    bucket_id = 'dms-files'
+    and exists (
+      select 1 from public.profiles
+      where profiles.id = auth.uid()
+      and profiles.role in ('Approver', 'Editor')
+    )
+  );
+

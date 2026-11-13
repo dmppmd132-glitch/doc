@@ -7,6 +7,7 @@ export function getR2Config() {
   const accessKeyId = process.env.R2_ACCESS_KEY_ID?.trim() || '';
   const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY?.trim() || '';
   const bucketName = process.env.R2_BUCKET_NAME?.trim() || '';
+  const region = process.env.R2_REGION?.trim() || 'auto';
   const endpoint =
     process.env.R2_ENDPOINT?.trim() ||
     (accountId ? `https://${accountId}.r2.cloudflarestorage.com` : '');
@@ -16,6 +17,7 @@ export function getR2Config() {
     accessKeyId,
     secretAccessKey,
     bucketName,
+    region,
     endpoint,
   };
 }
@@ -26,12 +28,12 @@ export function isR2Configured(): boolean {
 }
 
 function createR2Client(): S3Client {
-  const { endpoint, accessKeyId, secretAccessKey } = getR2Config();
+  const { endpoint, region, accessKeyId, secretAccessKey } = getR2Config();
   if (!endpoint || !accessKeyId || !secretAccessKey) {
-    throw new Error('Cloudflare R2 環境變數尚未設定完成');
+    throw new Error('雲端儲存 (R2 / Backblaze B2) 環境變數尚未設定完成');
   }
   return new S3Client({
-    region: 'auto',
+    region,
     endpoint,
     credentials: {
       accessKeyId,

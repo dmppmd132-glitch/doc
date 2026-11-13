@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { X, Upload, FileCode, CheckCircle2, AlertCircle, Info, ArrowUpRight } from 'lucide-react';
 import { Document, AttachedFile } from '../types/dms';
 import { useDms } from '../context/DmsContext';
-import { uploadFileToR2, formatFileSize, detectFileExtensionType } from '../lib/r2Client';
+import { uploadDocumentBinary, formatFileSize, detectFileExtensionType } from '../lib/r2Client';
+import { isSupabaseConfigured } from '../lib/supabase';
 
 interface RevisionModalProps {
   document: Document | null;
@@ -63,17 +64,25 @@ export const RevisionModal: React.FC<RevisionModalProps> = ({
     }
 
     let finalFile = attachedFile;
-    if (rawFile && r2Configured) {
+    if (rawFile && (r2Configured || isSupabaseConfigured())) {
       setUploading(true);
       setUploadProgress(0);
       try {
-        const objectKey = await uploadFileToR2(rawFile, document.docNumber, targetVersion, setUploadProgress);
-        finalFile = {
-          ...attachedFile,
-          fileUrl: objectKey,
-        };
+        const storedUrl = await uploadDocumentBinary(
+          rawFile,
+          document.docNumber,
+          targetVersion,
+          r2Configured,
+          setUploadProgress
+        );
+        if (storedUrl) {
+          finalFile = {
+            ...attachedFile,
+            fileUrl: storedUrl,
+          };
+        }
       } catch (err: any) {
-        setError(err?.message || '上傳檔案至 Cloudflare R2 失敗');
+        setError(err?.message || '上傳檔案失敗，請稍後再試');
         setUploading(false);
         return;
       } finally {
@@ -190,7 +199,11 @@ export const RevisionModal: React.FC<RevisionModalProps> = ({
                 上傳新版實體檔案 <span className="text-rose-500">*</span>
               </label>
               <span className="text-[10px] font-mono text-slate-500">
-                {r2Configured ? 'Cloudflare R2 雲端儲存已就緒' : '僅保留檔名紀錄'}
+                {r2Configured
+                  ? 'R2 / B2 雲端物件儲存已就緒'
+                  : isSupabaseConfigured()
+                  ? 'Supabase 試行儲存 (單檔 ≤ 50 MB)'
+                  : '僅保留檔名紀錄'}
               </span>
             </div>
             <div className="border-2 border-dashed border-slate-300 rounded-lg p-3.5 text-center bg-slate-50/50">
@@ -225,7 +238,9 @@ export const RevisionModal: React.FC<RevisionModalProps> = ({
               {uploading && (
                 <div className="mt-2 max-w-xs mx-auto space-y-1">
                   <div className="flex justify-between text-[10px] font-mono text-blue-700">
-                    <span>正在上傳新版至 R2...</span>
+                    <span>
+                      {r2Configured ? '正在上傳新版至雲端物件儲存...' : '正在上傳新版至 Supabase 儲存空間...'}
+                    </span>
                     <span>{uploadProgress}%</span>
                   </div>
                   <div className="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">

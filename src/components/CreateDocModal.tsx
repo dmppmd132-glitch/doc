@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { X, Upload, FileText, CheckCircle2, AlertCircle, FileCode } from 'lucide-react';
 import { DocType, Department, AttachedFile } from '../types/dms';
 import { useDms } from '../context/DmsContext';
-import { uploadFileToR2, formatFileSize, detectFileExtensionType } from '../lib/r2Client';
+import { uploadDocumentBinary, formatFileSize, detectFileExtensionType } from '../lib/r2Client';
+import { isSupabaseConfigured } from '../lib/supabase';
 
 interface CreateDocModalProps {
   isOpen: boolean;
@@ -76,17 +77,25 @@ export const CreateDocModal: React.FC<CreateDocModalProps> = ({
     setUploadError('');
     let finalFile: AttachedFile = attachedFile;
 
-    if (rawFile && r2Configured) {
+    if (rawFile && (r2Configured || isSupabaseConfigured())) {
       setUploading(true);
       setUploadProgress(0);
       try {
-        const objectKey = await uploadFileToR2(rawFile, previewDocNumber, 'v1.0', setUploadProgress);
-        finalFile = {
-          ...attachedFile,
-          fileUrl: objectKey,
-        };
+        const storedUrl = await uploadDocumentBinary(
+          rawFile,
+          previewDocNumber,
+          'v1.0',
+          r2Configured,
+          setUploadProgress
+        );
+        if (storedUrl) {
+          finalFile = {
+            ...attachedFile,
+            fileUrl: storedUrl,
+          };
+        }
       } catch (err: any) {
-        setUploadError(err?.message || '上傳檔案至 Cloudflare R2 失敗');
+        setUploadError(err?.message || '上傳檔案失敗，請稍後再試');
         setUploading(false);
         return;
       } finally {
@@ -227,7 +236,11 @@ export const CreateDocModal: React.FC<CreateDocModalProps> = ({
                 上傳實體文件檔案 (支援 PDF、Word、Excel、圖檔或壓縮檔) <span className="text-rose-500">*</span>
               </label>
               <span className="text-[10px] font-mono text-slate-500">
-                {r2Configured ? 'Cloudflare R2 雲端儲存已就緒' : '尚未設定 R2 僅保留檔名紀錄'}
+                {r2Configured
+                  ? 'R2 / B2 雲端物件儲存已就緒'
+                  : isSupabaseConfigured()
+                  ? 'Supabase 試行儲存 (單檔 ≤ 50 MB)'
+                  : '本機模式僅保留檔名紀錄'}
               </span>
             </div>
             <div className="border-2 border-dashed border-slate-300 hover:border-slate-400 rounded-lg p-4 text-center bg-slate-50/50 transition-colors">
@@ -263,7 +276,9 @@ export const CreateDocModal: React.FC<CreateDocModalProps> = ({
               {uploading && (
                 <div className="mt-3 max-w-xs mx-auto space-y-1">
                   <div className="flex justify-between text-[10px] font-mono text-blue-700">
-                    <span>正在上傳至 Cloudflare R2...</span>
+                    <span>
+                      {r2Configured ? '正在上傳至雲端物件儲存...' : '正在上傳至 Supabase 儲存空間...'}
+                    </span>
                     <span>{uploadProgress}%</span>
                   </div>
                   <div className="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
