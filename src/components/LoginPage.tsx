@@ -7,7 +7,8 @@ import {
   ArrowRight,
   AlertCircle,
   CheckCircle2,
-  Database
+  Database,
+  Mail
 } from 'lucide-react';
 import { useDms } from '../context/DmsContext';
 import { Role, Department } from '../types/dms';
@@ -22,6 +23,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
   const [isSignUp, setIsSignUp] = useState(false);
 
   const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [title, setTitle] = useState('');
   const [role, setRole] = useState<Role>('Editor');
@@ -57,6 +59,11 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
       return;
     }
 
+    if (isSignUp && !email.trim()) {
+      setErrorMsg('註冊新帳號請填寫電子信箱 (Email)');
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -65,7 +72,15 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
         const res = await loginWithSupabase(
           name.trim(),
           password,
-          isSignUp ? { name: name.trim(), title: title.trim() || '專員', role, department } : undefined
+          isSignUp
+            ? {
+                name: name.trim(),
+                email: email.trim(),
+                title: title.trim() || '專員',
+                role,
+                department,
+              }
+            : undefined
         );
         if (res.error) {
           setErrorMsg(res.error);
@@ -200,6 +215,26 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                 />
               </div>
             </div>
+
+            {/* Email (Required for Sign Up so Chinese names have valid auth email) */}
+            {isSignUp && (
+              <div>
+                <label className="font-semibold text-slate-700 block mb-1">
+                  電子信箱 (Email)
+                </label>
+                <div className="relative">
+                  <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="請輸入公司信箱 (註冊後即可以上方成員姓名登入)"
+                    required
+                    className="w-full pl-9 pr-3 py-2 bg-slate-50 focus:bg-white border border-slate-300 focus:border-slate-900 rounded-md outline-none transition-colors"
+                  />
+                </div>
+              </div>
+            )}
 
             {/* Password */}
             <div>

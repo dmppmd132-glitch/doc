@@ -38,6 +38,7 @@ interface InitiateRevisionInput {
 
 interface SignUpMetadata {
   name: string;
+  email?: string;
   title: string;
   role: Role;
   department: Department;
@@ -149,9 +150,14 @@ export const DmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     if (signUpData) {
       // Sign up flow
-      const signupEmail = nameOrEmail.includes('@')
-        ? nameOrEmail.trim()
-        : `${nameOrEmail.trim().toLowerCase()}@apex.internal`;
+      const rawEmail = (signUpData.email || nameOrEmail).trim();
+      const signupEmail = rawEmail.includes('@')
+        ? rawEmail
+        : `${rawEmail.toLowerCase()}@apex.internal`;
+
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(signupEmail)) {
+        return { error: '註冊帳號請填寫有效的 Email 格式（例如 name@company.com）' };
+      }
 
       const { data, error } = await supabase.auth.signUp({
         email: signupEmail,
@@ -205,21 +211,38 @@ export const DmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       let userEmail = nameOrEmail.trim();
 
       if (!userEmail.includes('@')) {
-        console.log("【步驟 1 發送 Network 請求】向 profiles 資料表查詢 Email...", { name: userEmail });
+        const cleanName = userEmail;
+        console.log("【步驟 1 發送 Network 請求】向 profiles 資料表查詢 Email...", { name: cleanName });
         const { data: profileData, error: profileError } = await supabase
           .from('profiles')
           .select('email, id, name, title, role, role_label, department, avatar_color')
-          .eq('name', userEmail)
+          .ilike('name', cleanName)
+          .limit(1)
           .maybeSingle();
 
         console.log("【步驟 1 查詢結果】", { profileData, profileError });
 
-        if (profileError || !profileData) {
-          console.error('查詢 profiles 失敗：', profileError?.message);
-          return { error: '查無此成員名稱，請確認輸入姓名是否正確或已於 Supabase profiles 建立' };
+        if (profileData?.email) {
+          userEmail = profileData.email;
+        } else {
+          // 備援：透過 SECURITY DEFINER RPC 函式查詢，繞過未登入(anon) RLS 讀取限制
+          console.log("【步驟 1B】嘗試透過 get_email_by_name RPC 查詢...", { lookup_name: cleanName });
+          const { data: rpcEmail, error: rpcError } = await supabase.rpc('get_email_by_name', {
+            lookup_name: cleanName,
+          });
+          console.log("【步驟 1B RPC 結果】", { rpcEmail, rpcError });
+
+          if (rpcEmail && typeof rpcEmail === 'string') {
+            userEmail = rpcEmail;
+          } else {
+            console.error('查詢 profiles 失敗：', profileError?.message || rpcError?.message);
+            return {
+              error:
+                '查無此成員名稱！請確認：(1) Supabase profiles 資料表內有該姓名；(2) 已執行最新 SQL 允許未登入查詢或建立 get_email_by_name 函式。',
+            };
+          }
         }
 
-        userEmail = profileData.email;
         console.log("【步驟 1 成功匹配 Email】", userEmail);
       }
 

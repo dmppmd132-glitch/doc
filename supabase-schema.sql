@@ -108,7 +108,10 @@ begin
     coalesce(new.raw_user_meta_data->>'role_label', '撰寫人'),
     coalesce(new.raw_user_meta_data->>'department', 'QA'),
     coalesce(new.raw_user_meta_data->>'avatar_color', 'bg-blue-600')
-  );
+  )
+  on conflict (id) do update set
+    name = excluded.name,
+    department = coalesce(new.raw_user_meta_data->>'department', public.profiles.department);
   return new;
 end;
 $$ language plpgsql security definer;
@@ -119,17 +122,61 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
 
+-- 補齊尚未寫入 profiles 的現有 auth.users 帳號
+insert into public.profiles (
+  id,
+  email,
+  name,
+  title,
+  role,
+  role_label,
+  department,
+  avatar_color
+)
+select
+  u.id,
+  u.email,
+  coalesce(u.raw_user_meta_data->>'name', split_part(u.email, '@', 1)),
+  coalesce(u.raw_user_meta_data->>'title', '工程師'),
+  coalesce(u.raw_user_meta_data->>'role', 'Editor'),
+  coalesce(u.raw_user_meta_data->>'role_label', '撰寫人'),
+  case
+    when (u.raw_user_meta_data->>'department') in ('QA', 'ME', 'PM') then (u.raw_user_meta_data->>'department')
+    else 'QA'
+  end,
+  coalesce(u.raw_user_meta_data->>'avatar_color', 'bg-blue-600')
+from auth.users u
+on conflict (id) do nothing;
+
+-- 5-1. 建立姓名登入查詢函式 (繞過未登入 anon 的 RLS 限制，僅回傳對應 Email)
+create or replace function public.get_email_by_name(lookup_name text)
+returns text
+language sql
+security definer
+set search_path = public
+as $$
+  select email
+  from public.profiles
+  where lower(trim(name)) = lower(trim(lookup_name))
+  limit 1;
+$$;
+
+grant execute on function public.get_email_by_name(text) to anon, authenticated;
+
 -- 6. 開啟 Row Level Security (RLS)
 alter table public.profiles enable row level security;
 alter table public.documents enable row level security;
 alter table public.document_versions enable row level security;
 
--- profiles 存取策略：已登入者皆可讀取成員資料，本人可更新自己資料
-create policy "允許所有已登入成員讀取人員設定檔"
+-- profiles 存取策略：允許登入頁(anon)依名稱反查 Email，且已登入成員可讀取成員資料、本人可更新自己資料
+drop policy if exists "允許所有已登入成員讀取人員設定檔" on public.profiles;
+drop policy if exists "允許登入查詢與已登入成員讀取人員設定檔" on public.profiles;
+create policy "允許登入查詢與已登入成員讀取人員設定檔"
   on public.profiles for select
-  to authenticated
+  to anon, authenticated
   using (true);
 
+drop policy if exists "允許使用者更新自己的設定檔" on public.profiles;
 create policy "允許使用者更新自己的設定檔"
   on public.profiles for update
   to authenticated
@@ -137,6 +184,7 @@ create policy "允許使用者更新自己的設定檔"
 
 -- documents 存取策略：
 -- 一般員工 (Viewer) 只能查詢狀態為「已生效」的文件；主管與撰寫人可查詢所有
+drop policy if exists "文件查詢權限控制" on public.documents;
 create policy "文件查詢權限控制"
   on public.documents for select
   to authenticated
@@ -149,6 +197,7 @@ create policy "文件查詢權限控制"
     )
   );
 
+drop policy if exists "文件新增權限（主管與撰寫人）" on public.documents;
 create policy "文件新增權限（主管與撰寫人）"
   on public.documents for insert
   to authenticated
@@ -160,6 +209,7 @@ create policy "文件新增權限（主管與撰寫人）"
     )
   );
 
+drop policy if exists "文件更新權限（主管與撰寫人）" on public.documents;
 create policy "文件更新權限（主管與撰寫人）"
   on public.documents for update
   to authenticated
@@ -172,6 +222,7 @@ create policy "文件更新權限（主管與撰寫人）"
   );
 
 -- document_versions 存取策略：
+drop policy if exists "版本紀錄查詢權限控制" on public.document_versions;
 create policy "版本紀錄查詢權限控制"
   on public.document_versions for select
   to authenticated
@@ -184,6 +235,7 @@ create policy "版本紀錄查詢權限控制"
     )
   );
 
+drop policy if exists "版本紀錄新增權限" on public.document_versions;
 create policy "版本紀錄新增權限"
   on public.document_versions for insert
   to authenticated
@@ -195,6 +247,7 @@ create policy "版本紀錄新增權限"
     )
   );
 
+drop policy if exists "版本紀錄更新審核權限" on public.document_versions;
 create policy "版本紀錄更新審核權限"
   on public.document_versions for update
   to authenticated
